@@ -122,7 +122,10 @@ Changing it reloads models on the selected device.
 <img width="2249" height="1175" alt="Screenshot 2026-01-26 145308" src="https://github.com/user-attachments/assets/eca65bbe-00a2-4a18-a190-db32f9a88e87" />
 <img width="2251" height="1301" alt="Screenshot 2026-01-26 145747" src="https://github.com/user-attachments/assets/25d6917c-4f5c-4b45-ba06-6c32e7c4cc05" />
 <img width="2242" height="502" alt="Screenshot 2026-01-26 145811" src="https://github.com/user-attachments/assets/7a11dab4-ad7a-4898-9066-cb5fb7cb29d8" />
-<img width="2234" height="1252" alt="Screenshot 2026-01-26 145854" src="https://github.com/user-attachments/assets/ad71d813-5dab-44c2-bfd6-41896854af9f" />
+<img width="2265" height="1311" alt="Screenshot 2026-01-26 184549" src="https://github.com/user-attachments/assets/01ae9b92-3e2f-4bf9-a3b0-44d48142c8f2" />
+<img width="2265" height="1311" alt="Screenshot 2026-01-26 184549" src="https://github.com/user-attachments/assets/55b4c80d-091c-42f9-b81a-412c7f494083" />
+
+
 
 ## Files / Folders
 
