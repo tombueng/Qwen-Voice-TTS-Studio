@@ -411,8 +411,19 @@ class QwenVoiceGUI:
     def load_cloned_voices(self):
         voices_file = self.cloned_voices_dir / "voices.json"
         if voices_file.exists():
-            with open(voices_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                if voices_file.stat().st_size == 0:
+                    return {}
+                with open(voices_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return data if isinstance(data, dict) else {}
+            except Exception:
+                try:
+                    with open(voices_file, 'w', encoding='utf-8') as f:
+                        json.dump({}, f, indent=2, ensure_ascii=False)
+                except Exception:
+                    pass
+                return {}
         return {}
     
     def save_cloned_voices(self):
@@ -453,8 +464,19 @@ class QwenVoiceGUI:
     def load_designed_voices(self):
         voices_file = self.designed_voices_dir / "voices.json"
         if voices_file.exists():
-            with open(voices_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                if voices_file.stat().st_size == 0:
+                    return {}
+                with open(voices_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return data if isinstance(data, dict) else {}
+            except Exception:
+                try:
+                    with open(voices_file, 'w', encoding='utf-8') as f:
+                        json.dump({}, f, indent=2, ensure_ascii=False)
+                except Exception:
+                    pass
+                return {}
         return {}
     
     def save_designed_voices(self):
