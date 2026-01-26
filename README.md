@@ -62,7 +62,7 @@ Run:
 
 ### Text-to-Speech
 
-- Built-in personas
+- 20 Built-in voices
 - Optional instructions to control style
 
 ### Voice Cloning
@@ -77,7 +77,7 @@ Run:
 
 ### Voice Samples
 
-- Generate MP3 samples for all personas for fast preview
+- Generate MP3 samples for all voices for fast preview
 - Samples are stored in `./voicesamples`
 
 ### Render Device selector
