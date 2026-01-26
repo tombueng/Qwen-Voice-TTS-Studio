@@ -13,7 +13,7 @@ ARGS=()
 
 echo
 echo "========================================"
-echo "Qwen Voice TTS Studio 0.9 (Beta) - Startup (Linux)"
+echo "Qwen Voice TTS Studio 1.0  - Startup (Linux)"
 echo "========================================"
 echo
 

@@ -6,7 +6,7 @@ set "ARGS="
 
 echo.
 echo ========================================
-echo Qwen Voice TTS Studio 0.9 (Beta) - Startup
+echo Qwen Voice TTS Studio 1.0  - Startup
 echo ========================================
 echo.
 

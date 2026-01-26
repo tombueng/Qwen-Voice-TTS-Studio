@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%"
 echo ========================================
-echo Qwen Voice TTS Studio 0.9 (Beta) - Setup Script
+echo Qwen Voice TTS Studio 1.0  - Setup Script
 echo ========================================
 echo.
 
@@ -106,31 +106,6 @@ if "%HAS_NVIDIA_GPU%"=="1" (
 )
 
 echo.
-echo ========================================
-echo Checking for SoX (Audio Processing Tool)
-echo ========================================
-echo.
-
-where sox >nul 2>&1
-if errorlevel 1 (
-    echo WARNING: SoX is not installed or not in PATH.
-    echo.
-    echo SoX is required for audio processing in qwen-tts.
-    echo.
-    echo Please download and install SoX from:
-    echo https://sourceforge.net/projects/sox/files/sox/14.4.2/
-    echo.
-    echo For Windows, download: sox-14.4.2-win32.zip
-    echo Extract it and add the folder to your system PATH.
-    echo.
-    echo After installing SoX, you may need to restart your computer.
-    echo.
-    set /p CONTINUE="Press Enter to continue setup anyway"
- ) else (
-     echo SoX found! Audio processing will work correctly.
- )
- 
- echo.
  echo Creating models directory
 if not exist "%SCRIPT_DIR%models" mkdir "%SCRIPT_DIR%models"
  echo.
@@ -202,7 +177,7 @@ echo Creating start script
  echo set "ARGS="
  echo.
  echo echo ========================================
- echo echo Qwen Voice TTS Studio 0.9 (Beta) - Startup
+ echo echo Qwen Voice TTS Studio 1.0  - Startup
  echo echo ========================================
  echo echo.
  echo.

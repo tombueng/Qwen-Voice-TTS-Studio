@@ -1,4 +1,4 @@
-# Qwen Voice TTS Studio 0.9 (Beta)
+# Qwen Voice TTS Studio 1.0
 <img width="848" height="352" alt="image" src="https://github.com/user-attachments/assets/cbf18fef-cbc6-442b-90bd-0674fe3b5d35" />
 
 A Windows-first, user-friendly Gradio GUI for **Qwen3-TTS**.
@@ -6,9 +6,13 @@ A Windows-first, user-friendly Gradio GUI for **Qwen3-TTS**.
 - Text-to-Speech
 - Voice Cloning
 - Voice Design
+- Conversations
 - Audio Library
 - Saved cloned/designed voices for reuse
 - MP3 voice samples for fast preview
+- Portable cloned voice references (stored in `./voiceinputs`)
+- Save-name option for outputs (filename prefix + timestamp)
+- Download outputs as WAV or MP3
 
 Project GitHub:
 https://github.com/Starnodes2024/Qwen-Voice-TTS-Studio
@@ -64,20 +68,30 @@ Run:
 
 - 20 Built-in voices
 - Optional instructions to control style
+- Optional save name for output filename prefix
 
 ### Voice Cloning
 
 - Upload WAV or MP3 reference
 - Save cloned voices for later reuse (no need to re-upload)
+- Reference audio is stored in `./voiceinputs` so cloned voices stay portable
+- Optional save name for output filename prefix
 
 ### Voice Design
 
 - Create voices from text descriptions
 - Save designed voices for later reuse
+- Optional save name for output filename prefix
+
+### Conversations
+
+- Select up to 3 voices
+- Write a script using tags like `[Voice1]`, `[Voice2]`, `[Voice3]`
+- Generates all parts and merges them into a single WAV output
 
 ### Voice Samples
 
-- Generate MP3 samples for all voices for fast preview
+- Generate MP3 samples for all personas for fast preview
 - Samples are stored in `./voicesamples`
 
 ### Render Device selector
@@ -101,7 +115,14 @@ Changing it reloads models on the selected device.
 - Windows: repo includes embedded Python **3.12** under `./312`
 - Disk space:
   - models are ~10-12GB total
-- SoX (required for audio processing). Install it and ensure `sox` is on PATH.
+
+## Screenshots
+<img width="2256" height="1236" alt="Screenshot 2026-01-26 144955" src="https://github.com/user-attachments/assets/aeb48aa8-95be-4a1e-bbc9-e8a96b8a3bc1" />
+<img width="2233" height="1281" alt="Screenshot 2026-01-26 145136" src="https://github.com/user-attachments/assets/f61f15eb-17ac-41e1-b3b8-0326168ce5e0" />
+<img width="2249" height="1175" alt="Screenshot 2026-01-26 145308" src="https://github.com/user-attachments/assets/eca65bbe-00a2-4a18-a190-db32f9a88e87" />
+<img width="2251" height="1301" alt="Screenshot 2026-01-26 145747" src="https://github.com/user-attachments/assets/25d6917c-4f5c-4b45-ba06-6c32e7c4cc05" />
+<img width="2242" height="502" alt="Screenshot 2026-01-26 145811" src="https://github.com/user-attachments/assets/7a11dab4-ad7a-4898-9066-cb5fb7cb29d8" />
+<img width="2234" height="1252" alt="Screenshot 2026-01-26 145854" src="https://github.com/user-attachments/assets/ad71d813-5dab-44c2-bfd6-41896854af9f" />
 
 ## Files / Folders
 
@@ -113,15 +134,6 @@ Key paths used by the app:
 - `./designed_voices` (saved designed voice metadata)
 - `./voicesamples` (MP3 preview samples)
 
-## Screenshots
-<img width="2256" height="1236" alt="Screenshot 2026-01-26 144955" src="https://github.com/user-attachments/assets/aeb48aa8-95be-4a1e-bbc9-e8a96b8a3bc1" />
-<img width="2233" height="1281" alt="Screenshot 2026-01-26 145136" src="https://github.com/user-attachments/assets/f61f15eb-17ac-41e1-b3b8-0326168ce5e0" />
-<img width="2249" height="1175" alt="Screenshot 2026-01-26 145308" src="https://github.com/user-attachments/assets/eca65bbe-00a2-4a18-a190-db32f9a88e87" />
-<img width="2251" height="1301" alt="Screenshot 2026-01-26 145747" src="https://github.com/user-attachments/assets/25d6917c-4f5c-4b45-ba06-6c32e7c4cc05" />
-<img width="2242" height="502" alt="Screenshot 2026-01-26 145811" src="https://github.com/user-attachments/assets/7a11dab4-ad7a-4898-9066-cb5fb7cb29d8" />
-<img width="2234" height="1252" alt="Screenshot 2026-01-26 145854" src="https://github.com/user-attachments/assets/ad71d813-5dab-44c2-bfd6-41896854af9f" />
-
-
 ## License
 
 This repository is licensed under the **Apache License 2.0** (see `LICENSE`).
@@ -130,4 +142,3 @@ Upstream reference:
 
 - Qwen3-TTS repo: https://github.com/QwenLM/Qwen3-TTS
 - The upstream codebase indicates Apache-2.0 licensing, and model weights may have separate terms.
-        

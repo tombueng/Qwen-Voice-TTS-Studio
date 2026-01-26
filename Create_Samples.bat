@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo  Qwen Voice TTS Studio 0.9 (Beta) - Sample Generator
+echo  Qwen Voice TTS Studio 1.0  - Sample Generator
 echo ========================================
 echo.
 echo This will generate MP3 samples for all voice personas.

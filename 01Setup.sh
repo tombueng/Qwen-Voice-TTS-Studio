@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "========================================"
-echo "Qwen Voice TTS Studio 0.9 (Beta) - Setup Script (Linux)"
+echo "Qwen Voice TTS Studio 1.0  - Setup Script (Linux)"
 echo "========================================"
 echo
 

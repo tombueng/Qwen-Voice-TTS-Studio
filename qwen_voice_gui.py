@@ -22,6 +22,10 @@ class QwenVoiceGUI:
         self.output_dir.mkdir(exist_ok=True)
         self.cloned_voices_dir = Path("cloned_voices")
         self.cloned_voices_dir.mkdir(exist_ok=True)
+        self.voiceinputs_dir = Path("voiceinputs")
+        self.voiceinputs_dir.mkdir(exist_ok=True)
+        self.downloads_dir = self.output_dir / "_downloads"
+        self.downloads_dir.mkdir(exist_ok=True)
         self.models_dir = Path("models")
         self.models_dir.mkdir(exist_ok=True)
         self.voicesamples_dir = Path("voicesamples")
@@ -35,6 +39,7 @@ class QwenVoiceGUI:
         
         self.audio_history = []
         self.cloned_voices = self.load_cloned_voices()
+        self.migrate_cloned_voice_paths()
         self.designed_voices = self.load_designed_voices()
         self.main_voices = self.load_main_voices()
         
@@ -42,6 +47,278 @@ class QwenVoiceGUI:
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
         self.voice_personas = self.get_voice_personas()
+
+    def sanitize_filename_part(self, name: str) -> str:
+        name = (name or "").strip()
+        if not name:
+            return "audio"
+        cleaned = "".join(c for c in name if c.isalnum() or c in ("_", "-", " ")).strip()
+        cleaned = cleaned.replace(" ", "_")
+        return cleaned or "audio"
+
+    def make_output_filename(self, prefix: str, timestamp: str, ext: str = "wav") -> str:
+        safe_prefix = self.sanitize_filename_part(prefix)
+        safe_ext = (ext or "wav").lstrip(".")
+        return f"{safe_prefix}_{timestamp}.{safe_ext}"
+
+    def prepare_download_file(self, filename: str, fmt: str):
+        if not filename:
+            return gr.update(value=None, visible=False), "Please select a file"
+
+        src_path = (self.output_dir / filename).resolve()
+        if not src_path.exists():
+            return gr.update(value=None, visible=False), "✗ File not found"
+
+        fmt = (fmt or "wav").lower()
+        if fmt not in ("wav", "mp3"):
+            fmt = "wav"
+
+        if fmt == "wav":
+            return gr.update(value=str(src_path), visible=True), f"✓ File ready: {filename}"
+
+        dst_name = f"{src_path.stem}.mp3"
+        dst_path = (self.downloads_dir / dst_name).resolve()
+
+        try:
+            audio = AudioSegment.from_wav(str(src_path))
+            audio.export(str(dst_path), format="mp3", bitrate="192k")
+            return gr.update(value=str(dst_path), visible=True), f"✓ File ready: {dst_name}"
+        except Exception as e:
+            return gr.update(value=None, visible=False), f"✗ Error: {str(e)}"
+
+    def update_library_tiles(self):
+        files = self.get_audio_library_files()
+        file_names = [f["name"] for f in files][:20]
+
+        label_updates = []
+        name_updates = []
+        check_updates = []
+        audio_updates = []
+
+        dl_wav_updates = []
+        dl_mp3_updates = []
+        dl_file_updates = []
+
+        for i in range(20):
+            if i < len(file_names):
+                name = file_names[i]
+                audio_path = str((self.output_dir / name).resolve())
+                label_updates.append(gr.update(value=f"**{name}**", visible=True))
+                name_updates.append(gr.update(value=name, visible=False))
+                check_updates.append(gr.update(value=False, visible=True))
+                audio_updates.append(gr.update(value=audio_path, visible=True))
+
+                dl_wav_updates.append(gr.update(visible=True))
+                dl_mp3_updates.append(gr.update(visible=True))
+                dl_file_updates.append(gr.update(value=None, visible=False))
+            else:
+                label_updates.append(gr.update(value="", visible=False))
+                name_updates.append(gr.update(value="", visible=False))
+                check_updates.append(gr.update(value=False, visible=False))
+                audio_updates.append(gr.update(value=None, visible=False))
+
+                dl_wav_updates.append(gr.update(visible=False))
+                dl_mp3_updates.append(gr.update(visible=False))
+                dl_file_updates.append(gr.update(value=None, visible=False))
+
+        return file_names, *label_updates, *name_updates, *check_updates, *audio_updates, *dl_wav_updates, *dl_mp3_updates, *dl_file_updates
+
+    def delete_selected_tile_files(self, file_names, selected_flags):
+        try:
+            if not file_names:
+                return "No files available", None
+
+            selected = []
+            for i, name in enumerate(file_names):
+                if i < len(selected_flags) and selected_flags[i]:
+                    selected.append(name)
+
+            status, _ = self.delete_selected_files(selected)
+            updated = self.get_audio_library_files()
+            return status, [f["name"] for f in updated]
+        except Exception as e:
+            return f"✗ Error: {str(e)}", None
+
+    def parse_conversation_script(self, script: str):
+        script = script or ""
+        lines = script.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+        turns = []
+        current_slot = None
+        buffer = []
+
+        def flush():
+            nonlocal buffer
+            if current_slot and buffer:
+                text = "\n".join(buffer).strip()
+                if text:
+                    turns.append((current_slot, text))
+            buffer = []
+
+        for raw in lines:
+            line = raw.strip()
+            if not line:
+                continue
+
+            lower = line.lower()
+            if lower in ("[voice1]", "[voice2]", "[voice3]"):
+                flush()
+                current_slot = lower.strip("[]")
+                continue
+
+            if line.startswith("[") and line.endswith("]"):
+                return None, f"Unknown voice tag: {line}. Use [Voice1], [Voice2], [Voice3]."
+
+            if current_slot is None:
+                return None, "Conversation must start with a voice tag like [Voice1]."
+
+            buffer.append(raw)
+
+        flush()
+
+        if not turns:
+            return None, "No conversation lines found. Add at least one block under [Voice1]/[Voice2]/[Voice3]."
+
+        return turns, None
+
+    def synthesize_text(self, text: str, language: str, speaker: str, instruct: str = "", progress=None):
+        if progress is None:
+            progress = gr.Progress()
+
+        voice_info = self.voice_personas.get(speaker, {})
+
+        if voice_info:
+            model_type = voice_info.get("model", "custom")
+
+            if model_type == "custom":
+                status = self.load_custom_model()
+                if "Error" in status:
+                    return None, None, status
+                wavs, sr = self.custom_model.generate_custom_voice(
+                    text=text,
+                    language=language if language != "Auto" else None,
+                    speaker=voice_info.get("speaker", speaker),
+                    instruct=instruct if (instruct or "").strip() else None,
+                )
+                return wavs, sr, None
+
+            status = self.load_design_model()
+            if "Error" in status:
+                return None, None, status
+
+            persona_instruct = voice_info.get("instruct", "")
+            combined_instruct = persona_instruct
+            if (instruct or "").strip():
+                combined_instruct = f"{persona_instruct}. {instruct}"
+
+            wavs, sr = self.design_model.generate_voice_design(
+                text=text,
+                language=language if language != "Auto" else None,
+                instruct=combined_instruct,
+            )
+            return wavs, sr, None
+
+        if speaker in self.cloned_voices:
+            status = self.load_base_model()
+            if "Error" in status:
+                return None, None, status
+
+            voice_data = self.cloned_voices[speaker]
+            prompt_items = self.base_model.create_voice_clone_prompt(
+                ref_audio=self.resolve_audio_path(voice_data.get("ref_audio")),
+                ref_text=voice_data.get("ref_text"),
+                x_vector_only_mode=not voice_data.get("ref_text"),
+            )
+            wavs, sr = self.base_model.generate_voice_clone(
+                text=text,
+                language=language if language != "Auto" else None,
+                voice_clone_prompt=prompt_items,
+                instruct=instruct if (instruct or "").strip() else None,
+            )
+            return wavs, sr, None
+
+        if speaker in self.designed_voices:
+            status = self.load_design_model()
+            if "Error" in status:
+                return None, None, status
+
+            voice_data = self.designed_voices[speaker]
+            wavs, sr = self.design_model.generate_voice_design(
+                text=text,
+                language=language if language != "Auto" else None,
+                instruct=voice_data.get("instruct", ""),
+            )
+            return wavs, sr, None
+
+        return None, None, f"✗ Voice not found: {speaker}"
+
+    def generate_conversation(self, voice1, voice2, voice3, script, language, save_name=None, progress=gr.Progress()):
+        try:
+            turns, err = self.parse_conversation_script(script)
+            if err:
+                return None, err
+
+            slot_map = {
+                "voice1": voice1,
+                "voice2": voice2,
+                "voice3": voice3,
+            }
+
+            if any(slot_map[k] is None for k in ("voice1", "voice2", "voice3")):
+                pass
+
+            parts = []
+            sample_rate = None
+
+            total = len(turns)
+            for i, (slot, text) in enumerate(turns, 1):
+                speaker = slot_map.get(slot)
+                if not speaker:
+                    return None, f"No voice selected for [{slot.capitalize()}]."
+
+                progress(i / (total + 1), desc=f"Generating {speaker}... ({i}/{total})")
+                wavs, sr, status = self.synthesize_text(text=text, language=language, speaker=speaker, instruct="")
+                if status:
+                    return None, status
+
+                if sr is None:
+                    return None, "✗ Failed to generate audio"
+
+                if sample_rate is None:
+                    sample_rate = sr
+                elif sr != sample_rate:
+                    return None, "✗ Sample rate mismatch between turns"
+
+                chunk = wavs[0]
+                parts.append(chunk)
+
+                silence_len = int(sample_rate * 0.25)
+                parts.append(np.zeros(silence_len, dtype=chunk.dtype))
+
+            if not parts:
+                return None, "No audio generated"
+
+            merged = np.concatenate(parts)
+
+            progress((total + 1) / (total + 1), desc="Saving audio...")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = self.make_output_filename(save_name or "conversation", timestamp, "wav")
+            filepath = self.output_dir / filename
+
+            sf.write(str(filepath), merged, sample_rate)
+
+            self.audio_history.append({
+                "filename": filename,
+                "filepath": str(filepath),
+                "timestamp": timestamp,
+                "type": "Conversation"
+            })
+
+            progress(1.0, desc="Complete!")
+            return str(filepath), f"✓ Conversation generated: {filename}"
+
+        except Exception as e:
+            return None, f"✗ Error: {str(e)}"
 
     def set_render_device(self, mode: str):
         mode = (mode or "Auto").strip()
@@ -142,6 +419,36 @@ class QwenVoiceGUI:
         voices_file = self.cloned_voices_dir / "voices.json"
         with open(voices_file, 'w', encoding='utf-8') as f:
             json.dump(self.cloned_voices, f, indent=2, ensure_ascii=False)
+
+    def resolve_audio_path(self, audio_path: str) -> str:
+        if not audio_path:
+            return audio_path
+        p = Path(audio_path)
+        if p.is_absolute():
+            return str(p)
+        return str((Path.cwd() / p).resolve())
+
+    def migrate_cloned_voice_paths(self):
+        # Make cloned voice ref_audio portable by pointing it into voiceinputs/
+        # if the user already placed the files there.
+        changed = False
+        for voice_name, voice_data in (self.cloned_voices or {}).items():
+            if not isinstance(voice_data, dict):
+                continue
+            ref_audio = voice_data.get("ref_audio")
+            if not ref_audio:
+                continue
+
+            ref_basename = Path(ref_audio).name
+            candidate = self.voiceinputs_dir / ref_basename
+            if candidate.exists():
+                portable_path = str((self.voiceinputs_dir / ref_basename).as_posix())
+                if voice_data.get("ref_audio") != portable_path:
+                    voice_data["ref_audio"] = portable_path
+                    changed = True
+
+        if changed:
+            self.save_cloned_voices()
     
     def load_designed_voices(self):
         voices_file = self.designed_voices_dir / "voices.json"
@@ -232,7 +539,7 @@ class QwenVoiceGUI:
             return self.custom_model.get_supported_languages()
         return ["Auto", "Chinese", "English", "Japanese", "Korean", "German", "French", "Russian", "Portuguese", "Spanish", "Italian"]
     
-    def generate_tts(self, text, language, speaker, instruct, progress=gr.Progress()):
+    def generate_tts(self, text, language, speaker, instruct, save_name=None, progress=gr.Progress()):
         try:
             if not text.strip():
                 return None, "Please enter text to synthesize"
@@ -287,7 +594,7 @@ class QwenVoiceGUI:
                 voice_data = self.cloned_voices[speaker]
                 progress(0.4, desc="Loading voice profile...")
                 prompt_items = self.base_model.create_voice_clone_prompt(
-                    ref_audio=voice_data["ref_audio"],
+                    ref_audio=self.resolve_audio_path(voice_data.get("ref_audio")),
                     ref_text=voice_data.get("ref_text"),
                     x_vector_only_mode=not voice_data.get("ref_text"),
                 )
@@ -318,7 +625,7 @@ class QwenVoiceGUI:
             
             progress(0.8, desc="Saving audio...")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"tts_{timestamp}.wav"
+            filename = self.make_output_filename(save_name or speaker, timestamp, "wav")
             filepath = self.output_dir / filename
             
             sf.write(str(filepath), wavs[0], sr)
@@ -339,7 +646,7 @@ class QwenVoiceGUI:
         except Exception as e:
             return None, f"✗ Error: {str(e)}"
     
-    def clone_voice(self, audio_file, ref_text, target_text, language, voice_name, progress=gr.Progress()):
+    def clone_voice(self, audio_file, ref_text, target_text, language, voice_name, save_name=None, progress=gr.Progress()):
         try:
             if audio_file is None:
                 return None, "Please upload a reference audio file", gr.update()
@@ -353,13 +660,20 @@ class QwenVoiceGUI:
                 return None, status, gr.update()
             
             progress(0.4, desc="Processing reference audio...")
-            
-            audio_path = audio_file
-            if audio_file.endswith('.mp3'):
-                audio = AudioSegment.from_mp3(audio_file)
-                temp_wav = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
-                audio.export(temp_wav.name, format='wav')
-                audio_path = temp_wav.name
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_voice_name = "".join(c for c in (voice_name or "voice") if c.isalnum() or c in ("_", "-", " ")).strip() or "voice"
+            ref_filename = f"{safe_voice_name}_{timestamp}.wav"
+            ref_dest = self.voiceinputs_dir / ref_filename
+
+            src_suffix = Path(audio_file).suffix.lower()
+            if src_suffix == ".wav":
+                shutil.copy2(audio_file, ref_dest)
+            else:
+                audio = AudioSegment.from_file(audio_file)
+                audio.export(str(ref_dest), format="wav")
+
+            audio_path = str(ref_dest)
             
             progress(0.6, desc="Cloning voice...")
             wavs, sr = self.base_model.generate_voice_clone(
@@ -371,8 +685,7 @@ class QwenVoiceGUI:
             )
             
             progress(0.8, desc="Saving audio...")
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"clone_{timestamp}.wav"
+            filename = self.make_output_filename(save_name or voice_name or "clone", timestamp, "wav")
             filepath = self.output_dir / filename
             
             sf.write(str(filepath), wavs[0], sr)
@@ -395,7 +708,7 @@ class QwenVoiceGUI:
                 
                 voice_data = {
                     "name": voice_name,
-                    "ref_audio": audio_path,
+                    "ref_audio": str((self.voiceinputs_dir / ref_filename).as_posix()),
                     "ref_text": ref_text,
                     "timestamp": timestamp
                 }
@@ -410,7 +723,7 @@ class QwenVoiceGUI:
         except Exception as e:
             return None, f"✗ Error: {str(e)}", gr.update()
     
-    def generate_with_cloned_voice(self, voice_name, text, language, progress=gr.Progress()):
+    def generate_with_cloned_voice(self, voice_name, text, language, save_name=None, progress=gr.Progress()):
         try:
             if not voice_name:
                 return None, "Please select a cloned voice"
@@ -427,10 +740,11 @@ class QwenVoiceGUI:
                 return None, status
             
             voice_data = self.cloned_voices[voice_name]
+            ref_audio = self.resolve_audio_path(voice_data.get("ref_audio"))
             
             progress(0.4, desc="Loading voice profile...")
             prompt_items = self.base_model.create_voice_clone_prompt(
-                ref_audio=voice_data["ref_audio"],
+                ref_audio=ref_audio,
                 ref_text=voice_data.get("ref_text"),
                 x_vector_only_mode=not voice_data.get("ref_text"),
             )
@@ -444,7 +758,7 @@ class QwenVoiceGUI:
             
             progress(0.8, desc="Saving audio...")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"cloned_{voice_name}_{timestamp}.wav"
+            filename = self.make_output_filename(save_name or voice_name, timestamp, "wav")
             filepath = self.output_dir / filename
             
             sf.write(str(filepath), wavs[0], sr)
@@ -464,7 +778,7 @@ class QwenVoiceGUI:
         except Exception as e:
             return None, f"✗ Error: {str(e)}"
     
-    def design_voice(self, text, language, instruct, voice_name, progress=gr.Progress()):
+    def design_voice(self, text, language, instruct, voice_name, save_name=None, progress=gr.Progress()):
         try:
             if not text.strip():
                 return None, "Please enter text to synthesize", gr.update()
@@ -486,7 +800,7 @@ class QwenVoiceGUI:
             
             progress(0.8, desc="Saving audio...")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"design_{timestamp}.wav"
+            filename = self.make_output_filename(save_name or voice_name or "design", timestamp, "wav")
             filepath = self.output_dir / filename
             
             sf.write(str(filepath), wavs[0], sr)
@@ -696,7 +1010,7 @@ class QwenVoiceGUI:
                 voice_data = self.cloned_voices[voice_name]
                 progress(0.4, desc="Loading voice profile...")
                 prompt_items = self.base_model.create_voice_clone_prompt(
-                    ref_audio=voice_data["ref_audio"],
+                    ref_audio=self.resolve_audio_path(voice_data.get("ref_audio")),
                     ref_text=voice_data.get("ref_text"),
                     x_vector_only_mode=not voice_data.get("ref_text"),
                 )
@@ -783,9 +1097,10 @@ class QwenVoiceGUI:
             return f"✗ Error: {str(e)}", gr.update()
     
     def create_interface(self):
-        with gr.Blocks(title="Qwen Voice TTS Studio 0.9 (Beta)") as app:
-            gr.Markdown("# Qwen Voice TTS Studio 0.9 (Beta)")
-            gr.Markdown("Generate high-quality speech with Qwen3-TTS models")
+        with gr.Blocks(title="Qwen Voice TTS Studio") as app:
+            library_refresh_token = gr.State(0)
+            gr.Markdown("# 🎙️ Qwen Voice TTS Studio")
+            gr.Markdown("Generate high-quality speech with multiple voice options")
             
             with gr.Tabs():
                 with gr.Tab("🎤 Text-to-Speech"):
@@ -822,6 +1137,12 @@ class QwenVoiceGUI:
                                 placeholder="e.g., 'Speak in a happy tone' or 'Use an angry voice'",
                                 lines=2
                             )
+
+                            tts_save_name = gr.Textbox(
+                                label="Save name (Optional)",
+                                placeholder="If set: used as filename prefix (timestamp will be appended)",
+                                lines=1
+                            )
                             
                             tts_generate_btn = gr.Button("🎵 Generate Speech", variant="primary", size="lg")
                         
@@ -849,8 +1170,14 @@ class QwenVoiceGUI:
 
                     tts_generate_btn.click(
                         fn=self.generate_tts,
-                        inputs=[tts_text, tts_language, tts_speaker, tts_instruct],
+                        inputs=[tts_text, tts_language, tts_speaker, tts_instruct, tts_save_name],
                         outputs=[tts_audio_output, tts_status]
+                    )
+
+                    tts_generate_btn.click(
+                        fn=lambda x: (x or 0) + 1,
+                        inputs=[library_refresh_token],
+                        outputs=[library_refresh_token]
                     )
                 
                 with gr.Tab("🎭 Voice Cloning"):
@@ -885,6 +1212,11 @@ class QwenVoiceGUI:
                                 choices=self.get_supported_languages(),
                                 value="Auto",
                                 allow_custom_value=True
+                            )
+                            clone_save_name = gr.Textbox(
+                                label="Save name (Optional)",
+                                placeholder="If set: used as output filename prefix (timestamp will be appended)",
+                                lines=1
                             )
                             clone_generate_btn = gr.Button("🎭 Clone & Generate", variant="primary", size="lg")
                     
@@ -921,6 +1253,12 @@ class QwenVoiceGUI:
                                 value="Auto",
                                 allow_custom_value=True
                             )
+
+                            saved_voice_save_name = gr.Textbox(
+                                label="Save name (Optional)",
+                                placeholder="If set: used as output filename prefix (timestamp will be appended)",
+                                lines=1
+                            )
                             
                             with gr.Row():
                                 saved_voice_generate_btn = gr.Button("🎵 Generate", variant="primary")
@@ -933,8 +1271,14 @@ class QwenVoiceGUI:
                     
                     clone_generate_btn.click(
                         fn=self.clone_voice,
-                        inputs=[clone_audio, clone_ref_text, clone_target_text, clone_language, clone_voice_name],
+                        inputs=[clone_audio, clone_ref_text, clone_target_text, clone_language, clone_voice_name, clone_save_name],
                         outputs=[clone_audio_output, clone_status, saved_voice_dropdown]
+                    )
+
+                    clone_generate_btn.click(
+                        fn=lambda x: (x or 0) + 1,
+                        inputs=[library_refresh_token],
+                        outputs=[library_refresh_token]
                     )
                     
                     saved_voice_dropdown.change(
@@ -957,8 +1301,14 @@ class QwenVoiceGUI:
                     
                     saved_voice_generate_btn.click(
                         fn=self.generate_with_cloned_voice,
-                        inputs=[saved_voice_dropdown, saved_voice_text, saved_voice_language],
+                        inputs=[saved_voice_dropdown, saved_voice_text, saved_voice_language, saved_voice_save_name],
                         outputs=[saved_voice_audio_output, saved_voice_status]
+                    )
+
+                    saved_voice_generate_btn.click(
+                        fn=lambda x: (x or 0) + 1,
+                        inputs=[library_refresh_token],
+                        outputs=[library_refresh_token]
                     )
                     
                     clone_add_to_main_btn.click(
@@ -997,6 +1347,12 @@ class QwenVoiceGUI:
                             design_voice_name = gr.Textbox(
                                 label="Save Voice As (Optional)",
                                 placeholder="Enter a name to save this designed voice for reuse"
+                            )
+
+                            design_save_name = gr.Textbox(
+                                label="Save name (Optional)",
+                                placeholder="If set: used as output filename prefix (timestamp will be appended)",
+                                lines=1
                             )
                             
                             gr.Markdown("""
@@ -1039,8 +1395,14 @@ class QwenVoiceGUI:
                     
                     design_generate_btn.click(
                         fn=self.design_voice,
-                        inputs=[design_text, design_language, design_instruct, design_voice_name],
+                        inputs=[design_text, design_language, design_instruct, design_voice_name, design_save_name],
                         outputs=[design_audio_output, design_status, designed_voice_dropdown]
+                    )
+
+                    design_generate_btn.click(
+                        fn=lambda x: (x or 0) + 1,
+                        inputs=[library_refresh_token],
+                        outputs=[library_refresh_token]
                     )
                     
                     designed_voice_dropdown.change(
@@ -1072,85 +1434,193 @@ class QwenVoiceGUI:
                         inputs=[designed_voice_dropdown],
                         outputs=[designed_voice_status, designed_voice_dropdown]
                     )
+
+                with gr.Tab("💬 Conversations"):
+                    gr.Markdown("### Generate multi-voice conversations from a script")
+
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            conv_voice1 = gr.Dropdown(
+                                label="Voice 1",
+                                choices=self.get_supported_speakers(),
+                                value=self.get_supported_speakers()[0] if self.get_supported_speakers() else None,
+                            )
+                            conv_voice2 = gr.Dropdown(
+                                label="Voice 2",
+                                choices=self.get_supported_speakers(),
+                                value=self.get_supported_speakers()[1] if len(self.get_supported_speakers()) > 1 else (self.get_supported_speakers()[0] if self.get_supported_speakers() else None),
+                            )
+                            conv_voice3 = gr.Dropdown(
+                                label="Voice 3",
+                                choices=self.get_supported_speakers(),
+                                value=self.get_supported_speakers()[2] if len(self.get_supported_speakers()) > 2 else (self.get_supported_speakers()[0] if self.get_supported_speakers() else None),
+                            )
+
+                            conv_language = gr.Dropdown(
+                                label="Language",
+                                choices=self.get_supported_languages(),
+                                value="Auto",
+                                allow_custom_value=True,
+                            )
+
+                            conv_save_name = gr.Textbox(
+                                label="Save name (Optional)",
+                                placeholder="If set: used as output filename prefix (timestamp will be appended)",
+                                lines=1,
+                            )
+
+                            conv_script = gr.Textbox(
+                                label="Conversation Script",
+                                placeholder="[Voice1]\nHey who are you?\n[Voice2]\nWho me?\n[Voice1]\nYes you!\n[Voice3]\nHi, I'm Sophie!\n",
+                                lines=14,
+                            )
+
+                            conv_generate_btn = gr.Button("💬 Generate Conversation", variant="primary", size="lg")
+
+                        with gr.Column(scale=1):
+                            conv_audio_output = gr.Audio(label="Generated Conversation", type="filepath")
+                            conv_status = gr.Textbox(label="Status", lines=3)
+                            conv_help = gr.Markdown(
+                                value=(
+                                    "**How to write a conversation script**\n\n"
+                                    "Use tags to switch speakers. Valid tags are:\n\n"
+                                    "- `[Voice1]`\n"
+                                    "- `[Voice2]`\n"
+                                    "- `[Voice3]`\n\n"
+                                    "**Example (copy/paste):**\n\n"
+                                    "```\n"
+                                    "[Voice1]\n"
+                                    "Hey who are you?\n"
+                                    "[Voice2]\n"
+                                    "Who me?\n"
+                                    "[Voice1]\n"
+                                    "Yes you!\n"
+                                    "[Voice3]\n"
+                                    "Hi, I'm Sophie!\n"
+                                    "[Voice1]\n"
+                                    "Not you!\n"
+                                    "```\n"
+                                )
+                            )
+
+                    conv_generate_btn.click(
+                        fn=self.generate_conversation,
+                        inputs=[conv_voice1, conv_voice2, conv_voice3, conv_script, conv_language, conv_save_name],
+                        outputs=[conv_audio_output, conv_status],
+                    )
+
+                    conv_generate_btn.click(
+                        fn=lambda x: (x or 0) + 1,
+                        inputs=[library_refresh_token],
+                        outputs=[library_refresh_token]
+                    )
                 
                 with gr.Tab("📂 Audio Library"):
                     gr.Markdown("### Manage your generated audio files")
                     
                     with gr.Row():
                         refresh_library_btn = gr.Button("🔄 Refresh List", size="sm")
-                    
-                    library_files = gr.CheckboxGroup(
-                        label="Audio Files (Select files to delete)",
-                        choices=[f["name"] for f in self.get_audio_library_files()],
-                        type="value"
-                    )
-                    
+
+                    library_file_names_state = gr.State([])
+
+                    library_status = gr.Textbox(label="Status", lines=2)
+
                     with gr.Row():
                         delete_selected_btn = gr.Button("🗑️ Delete Selected Files", variant="stop")
-                    
-                    library_status = gr.Textbox(label="Status", lines=2)
-                    
-                    gr.Markdown("### File Preview")
-                    
-                    with gr.Row():
-                        with gr.Column():
-                            preview_file_dropdown = gr.Dropdown(
-                                label="Select File to Preview/Download",
-                                choices=[f["name"] for f in self.get_audio_library_files()],
-                                value=None
-                            )
-                            preview_audio = gr.Audio(label="Audio Player", type="filepath")
-                            preview_info = gr.Markdown(value="")
-                            
-                            with gr.Row():
-                                download_btn = gr.Button("� Download File", variant="secondary")
-                    
-                    def update_library():
-                        files = self.get_audio_library_files()
-                        file_names = [f["name"] for f in files]
-                        return gr.update(choices=file_names), gr.update(choices=file_names)
-                    
-                    def preview_file(filename):
-                        if not filename:
-                            return None, ""
-                        filepath = self.output_dir / filename
-                        if filepath.exists():
-                            size_mb = filepath.stat().st_size / (1024 * 1024)
-                            modified = datetime.fromtimestamp(filepath.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                            info = f"**{filename}**\n\n- Size: {size_mb:.2f} MB\n- Modified: {modified}"
-                            return str(filepath), info
-                        return None, "File not found"
-                    
-                    def download_file(filename):
-                        if not filename:
-                            return "Please select a file"
-                        filepath = self.output_dir / filename
-                        if filepath.exists():
-                            return f"✓ File ready for download: {filename}"
-                        return "✗ File not found"
-                    
-                    refresh_library_btn.click(
-                        fn=update_library,
+
+                    tile_labels = []
+                    tile_names = []
+                    tile_checks = []
+                    tile_audios = []
+                    tile_dl_wav_btns = []
+                    tile_dl_mp3_btns = []
+                    tile_dl_files = []
+
+                    for row in range(5):
+                        with gr.Row():
+                            for col in range(4):
+                                with gr.Column():
+                                    lbl = gr.Markdown(value="", visible=False)
+                                    name = gr.Textbox(value="", visible=False)
+                                    chk = gr.Checkbox(label="Select", value=False, visible=False)
+                                    aud = gr.Audio(label="", type="filepath", visible=False)
+                                    with gr.Row():
+                                        dl_wav = gr.Button("⬇ WAV", size="sm")
+                                        dl_mp3 = gr.Button("⬇ MP3", size="sm")
+                                    dl_file = gr.File(label="Download", visible=False)
+                                    tile_labels.append(lbl)
+                                    tile_names.append(name)
+                                    tile_checks.append(chk)
+                                    tile_audios.append(aud)
+                                    tile_dl_wav_btns.append(dl_wav)
+                                    tile_dl_mp3_btns.append(dl_mp3)
+                                    tile_dl_files.append(dl_file)
+
+                    def refresh_tiles(_token=None):
+                        return self.update_library_tiles()
+
+                    library_refresh_token.change(
+                        fn=refresh_tiles,
+                        inputs=[library_refresh_token],
+                        outputs=[
+                            library_file_names_state,
+                            *tile_labels,
+                            *tile_names,
+                            *tile_checks,
+                            *tile_audios,
+                            *tile_dl_wav_btns,
+                            *tile_dl_mp3_btns,
+                            *tile_dl_files,
+                        ]
+                    )
+
+                    app.load(
+                        fn=refresh_tiles,
                         inputs=[],
-                        outputs=[library_files, preview_file_dropdown]
+                        outputs=[
+                            library_file_names_state,
+                            *tile_labels,
+                            *tile_names,
+                            *tile_checks,
+                            *tile_audios,
+                            *tile_dl_wav_btns,
+                            *tile_dl_mp3_btns,
+                            *tile_dl_files,
+                        ]
                     )
-                    
-                    preview_file_dropdown.change(
-                        fn=preview_file,
-                        inputs=[preview_file_dropdown],
-                        outputs=[preview_audio, preview_info]
+
+                    refresh_library_btn.click(
+                        fn=lambda x: (x or 0) + 1,
+                        inputs=[library_refresh_token],
+                        outputs=[library_refresh_token]
                     )
-                    
-                    download_btn.click(
-                        fn=download_file,
-                        inputs=[preview_file_dropdown],
-                        outputs=[library_status]
-                    )
-                    
+
+                    for i in range(20):
+                        tile_dl_wav_btns[i].click(
+                            fn=lambda n: self.prepare_download_file(n, "wav"),
+                            inputs=[tile_names[i]],
+                            outputs=[tile_dl_files[i], library_status]
+                        )
+                        tile_dl_mp3_btns[i].click(
+                            fn=lambda n: self.prepare_download_file(n, "mp3"),
+                            inputs=[tile_names[i]],
+                            outputs=[tile_dl_files[i], library_status]
+                        )
+
+                    def delete_from_tiles(file_names, *flags):
+                        status, updated_names = self.delete_selected_tile_files(file_names, list(flags))
+                        return status, updated_names
+
                     delete_selected_btn.click(
-                        fn=self.delete_selected_files,
-                        inputs=[library_files],
-                        outputs=[library_status, library_files]
+                        fn=delete_from_tiles,
+                        inputs=[library_file_names_state, *tile_checks],
+                        outputs=[library_status, library_file_names_state]
+                    )
+
+                    delete_selected_btn.click(
+                        fn=lambda x: (x or 0) + 1,
+                        inputs=[library_refresh_token],
+                        outputs=[library_refresh_token]
                     )
                 
                 with gr.Tab("⚙️ Settings"):
@@ -1203,13 +1673,16 @@ class QwenVoiceGUI:
                 
                 with gr.Tab("ℹ️ Info"):
                     gr.Markdown("""
-                    ## Qwen Voice TTS Studio
+                    ## Qwen Voice TTS Studio 1.0
                     
                     ### Features:
                     - **Text-to-Speech**: Generate speech using pre-built voice profiles
                     - **Voice Cloning**: Clone any voice from a short audio sample
                     - **Voice Design**: Create custom voices using natural language descriptions
-                    - **Audio Library**: Manage and organize your generated audio files
+                    - **Conversations**: Script multi-voice dialogs with `[Voice1]`, `[Voice2]`, `[Voice3]`
+                    - **Audio Library**: Tile-based library with preview and per-file WAV/MP3 download
+                    - **Save name**: Optional output filename prefix (timestamp is appended)
+                    - **Portable cloned voices**: Reference audio is stored in `voiceinputs/`
                     
                     ### Supported Languages:
                     Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish, Italian
