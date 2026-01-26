@@ -1,4 +1,5 @@
 # Qwen Voice TTS Studio 0.9 (Beta)
+<img width="848" height="352" alt="image" src="https://github.com/user-attachments/assets/cbf18fef-cbc6-442b-90bd-0674fe3b5d35" />
 
 A Windows-first, user-friendly Gradio GUI for **Qwen3-TTS**.
 
