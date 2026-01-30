@@ -36,6 +36,8 @@ class QwenVoiceGUI:
         self.custom_model = None
         self.base_model = None
         self.design_model = None
+        self.asr_model = None
+        self.asr_model_id = None
         
         self.audio_history = []
         self.cloned_voices = self.load_cloned_voices()
@@ -344,8 +346,172 @@ class QwenVoiceGUI:
         self.custom_model = None
         self.base_model = None
         self.design_model = None
+        self.asr_model = None
+        self.asr_model_id = None
 
         return self.get_system_info_markdown()
+
+    def download_asr_models(self, download_forced_aligner: bool = False):
+        try:
+            from huggingface_hub import snapshot_download
+
+            self.models_dir.mkdir(exist_ok=True)
+            asr_local_dir = self.models_dir / "Qwen3-ASR-1.7B"
+            snapshot_download(
+                repo_id="Qwen/Qwen3-ASR-1.7B",
+                local_dir=str(asr_local_dir),
+                local_dir_use_symlinks=False,
+            )
+
+            if download_forced_aligner:
+                aligner_local_dir = self.models_dir / "Qwen3-ForcedAligner-0.6B"
+                snapshot_download(
+                    repo_id="Qwen/Qwen3-ForcedAligner-0.6B",
+                    local_dir=str(aligner_local_dir),
+                    local_dir_use_symlinks=False,
+                )
+
+            self.asr_model = None
+            self.asr_model_id = None
+            return "✓ ASR model(s) downloaded to ./models"
+        except Exception as e:
+            return f"✗ Error downloading ASR model(s): {str(e)}"
+
+    def load_asr_model(self, model_choice: str, use_forced_aligner: bool = False):
+        try:
+            from qwen_asr import Qwen3ASRModel
+
+            model_choice = (model_choice or "Qwen/Qwen3-ASR-1.7B").strip()
+            local_dir_name = model_choice.split("/")[-1]
+            local_model_path = self.models_dir / local_dir_name
+            model_path = str(local_model_path) if local_model_path.exists() else model_choice
+
+            aligner_id = None
+            aligner_kwargs = None
+            if use_forced_aligner:
+                aligner_local = self.models_dir / "Qwen3-ForcedAligner-0.6B"
+                aligner_id = str(aligner_local) if aligner_local.exists() else "Qwen/Qwen3-ForcedAligner-0.6B"
+                aligner_kwargs = dict(
+                    dtype=self.dtype,
+                    device_map=self.device,
+                    attn_implementation=self._get_attn_implementation(),
+                )
+
+            desired_id = f"{model_path}|aligner={bool(use_forced_aligner)}|device={self.device}|dtype={str(self.dtype)}"
+            if self.asr_model is not None and self.asr_model_id == desired_id:
+                return "✓ ASR model already loaded"
+
+            self.asr_model = Qwen3ASRModel.from_pretrained(
+                model_path,
+                dtype=self.dtype,
+                device_map=self.device,
+                attn_implementation=self._get_attn_implementation(),
+                max_inference_batch_size=8,
+                max_new_tokens=256,
+                forced_aligner=aligner_id,
+                forced_aligner_kwargs=aligner_kwargs,
+            )
+            self.asr_model_id = desired_id
+            return "✓ ASR model loaded successfully"
+        except ImportError:
+            return "✗ qwen-asr is not installed. Please run setup again or install it in the venv: pip install -U qwen-asr"
+        except Exception as e:
+            return f"✗ Error loading ASR model: {str(e)}"
+
+    def transcribe_audio(
+        self,
+        audio_file,
+        model_choice: str,
+        language: str,
+        save_prefix: str,
+        recreate_voice: bool,
+        tts_voice: str,
+        tts_language: str,
+        return_timestamps: bool,
+        progress=gr.Progress(),
+    ):
+        try:
+            if audio_file is None:
+                return "", "", None, "Please provide audio (upload or microphone)."
+
+            progress(0.1, desc="Loading ASR model...")
+            status = self.load_asr_model(model_choice=model_choice, use_forced_aligner=return_timestamps)
+            if status.startswith("✗"):
+                return "", "", None, status
+
+            lang = None
+            if (language or "Auto").strip() not in ("", "Auto"):
+                lang = language
+
+            progress(0.5, desc="Transcribing...")
+            results = self.asr_model.transcribe(
+                audio=audio_file,
+                language=lang,
+                return_time_stamps=bool(return_timestamps),
+            )
+            text = (results[0].text if results else "") or ""
+
+            ts_text = ""
+            ts_data = None
+            if return_timestamps and results:
+                ts_data = getattr(results[0], "time_stamps", None)
+                if ts_data:
+                    try:
+                        ts_text = json.dumps(ts_data, ensure_ascii=False, indent=2)
+                    except Exception:
+                        ts_text = str(ts_data)
+
+            progress(0.75, desc="Saving transcript...")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base = Path(audio_file).stem if audio_file else "audio"
+            prefix = save_prefix.strip() if (save_prefix or "").strip() else f"asr_{base}"
+            filename = self.make_output_filename(prefix, timestamp, "txt")
+            filepath = (self.output_dir / filename).resolve()
+            filepath.parent.mkdir(exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(text)
+
+            ts_path = None
+            if return_timestamps:
+                ts_filename = self.make_output_filename(f"{prefix}_timestamps", timestamp, "json")
+                ts_path = (self.output_dir / ts_filename).resolve()
+                with open(ts_path, "w", encoding="utf-8") as f:
+                    f.write(ts_text or "[]")
+
+            tts_out = None
+            extra = f"✓ Transcript saved: {filepath}"
+            if return_timestamps:
+                if ts_path:
+                    extra = extra + f"\n✓ Timestamps saved: {ts_path}"
+                if not ts_text.strip():
+                    extra = extra + "\n✗ No timestamps returned (check that Forced Aligner is downloaded and 'Return timestamps' is enabled)."
+
+            if recreate_voice:
+                if not text.strip():
+                    return text, ts_text, None, extra + "\n✗ Cannot recreate voice from empty transcript."
+
+                progress(0.85, desc="Recreating voice...")
+                wavs, sr, err = self.synthesize_text(
+                    text=text,
+                    language=tts_language,
+                    speaker=tts_voice,
+                    instruct="",
+                    progress=progress,
+                )
+                if err:
+                    return text, ts_text, None, extra + f"\n{err}"
+
+                ts2 = datetime.now().strftime("%Y%m%d_%H%M%S")
+                audio_filename = self.make_output_filename(f"asr_revoice_{tts_voice}", ts2, "wav")
+                audio_path = (self.output_dir / audio_filename).resolve()
+                sf.write(str(audio_path), wavs[0], sr)
+                tts_out = str(audio_path)
+                extra = extra + f"\n✓ Re-voiced audio saved: {audio_path}"
+
+            progress(1.0, desc="Complete!")
+            return text, ts_text, tts_out, extra
+        except Exception as e:
+            return "", "", None, f"✗ Error: {str(e)}"
 
     def _get_attn_implementation(self):
         if self.device.startswith("cuda") and is_flash_attn_2_available():
@@ -1536,6 +1702,96 @@ class QwenVoiceGUI:
                         inputs=[library_refresh_token],
                         outputs=[library_refresh_token]
                     )
+
+                with gr.Tab("🎙️ Voice ASR"):
+                    gr.Markdown("### Transcribe audio to text (Qwen3-ASR)")
+
+                    with gr.Row():
+                        with gr.Column(scale=2):
+                            asr_audio = gr.Audio(
+                                label="Audio Input (Upload or Microphone)",
+                                type="filepath",
+                                sources=["upload", "microphone"],
+                            )
+
+                            with gr.Row():
+                                asr_model_choice = gr.Dropdown(
+                                    label="ASR Model",
+                                    choices=["Qwen/Qwen3-ASR-1.7B"],
+                                    value="Qwen/Qwen3-ASR-1.7B",
+                                )
+                                asr_language = gr.Dropdown(
+                                    label="Language",
+                                    choices=["Auto", "English", "Chinese"],
+                                    value="Auto",
+                                    allow_custom_value=True,
+                                )
+
+                            asr_save_prefix = gr.Textbox(
+                                label="Save name (Optional)",
+                                placeholder="If set: used as transcript filename prefix (timestamp will be appended)",
+                                lines=1,
+                            )
+
+                            with gr.Row():
+                                asr_download_aligner = gr.Checkbox(
+                                    label="Also download Forced Aligner (timestamps model)",
+                                    value=False,
+                                )
+                                asr_return_timestamps = gr.Checkbox(
+                                    label="Return timestamps (requires Forced Aligner)",
+                                    value=False,
+                                )
+
+                            with gr.Row():
+                                asr_download_btn = gr.Button("⬇ Download ASR Model(s)", variant="secondary")
+                                asr_transcribe_btn = gr.Button("📝 Transcribe", variant="primary")
+
+                            gr.Markdown("---")
+                            asr_recreate_voice = gr.Checkbox(
+                                label="Recreate voice with selected TTS voice",
+                                value=False,
+                            )
+
+                            with gr.Row():
+                                asr_tts_voice = gr.Dropdown(
+                                    label="TTS Voice",
+                                    choices=self.get_supported_speakers(),
+                                    value=self.get_supported_speakers()[0] if self.get_supported_speakers() else None,
+                                )
+                                asr_tts_language = gr.Dropdown(
+                                    label="TTS Language",
+                                    choices=self.get_supported_languages(),
+                                    value="Auto",
+                                    allow_custom_value=True,
+                                )
+
+                        with gr.Column(scale=1):
+                            asr_text_output = gr.Textbox(label="Transcript", lines=12)
+                            asr_timestamps_output = gr.Textbox(label="Timestamps (JSON)", lines=8)
+                            asr_revoice_audio = gr.Audio(label="Re-voiced Audio (Optional)", type="filepath")
+                            asr_status = gr.Textbox(label="Status", lines=6)
+
+                    asr_download_btn.click(
+                        fn=self.download_asr_models,
+                        inputs=[asr_download_aligner],
+                        outputs=[asr_status],
+                    )
+
+                    asr_transcribe_btn.click(
+                        fn=self.transcribe_audio,
+                        inputs=[
+                            asr_audio,
+                            asr_model_choice,
+                            asr_language,
+                            asr_save_prefix,
+                            asr_recreate_voice,
+                            asr_tts_voice,
+                            asr_tts_language,
+                            asr_return_timestamps,
+                        ],
+                        outputs=[asr_text_output, asr_timestamps_output, asr_revoice_audio, asr_status],
+                    )
                 
                 with gr.Tab("📂 Audio Library"):
                     gr.Markdown("### Manage your generated audio files")
@@ -1695,7 +1951,7 @@ class QwenVoiceGUI:
                 
                 with gr.Tab("ℹ️ Info"):
                     gr.Markdown("""
-                    ## Qwen Voice TTS Studio 1.0
+                    ## Qwen Voice TTS Studio 1.1
                     
                     ### Features:
                     - **Text-to-Speech**: Generate speech using pre-built voice profiles

@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%"
 echo ========================================
-echo Qwen Voice TTS Studio 1.0  - Setup Script
+echo Qwen Voice TTS Studio 1.1  - Setup Script
 echo ========================================
 echo.
 
@@ -92,6 +92,33 @@ echo Installing requirements
 echo.
 
 echo.
+echo Installing pytz (required by gradio)
+"%VENV_PATH%\Scripts\python.exe" -m pip install -U pytz
+if errorlevel 1 (
+    echo.
+    echo WARNING: pytz install failed. Gradio may fail to import.
+)
+echo.
+
+echo.
+echo Installing qwen-asr (for Voice ASR tab)
+"%VENV_PATH%\Scripts\python.exe" -m pip install -U qwen-asr
+if errorlevel 1 (
+    echo.
+    echo WARNING: qwen-asr install failed. Voice ASR tab will prompt you to install it manually.
+)
+echo.
+
+echo.
+echo Pinning transformers==4.57.3 (required by qwen-tts)
+"%VENV_PATH%\Scripts\python.exe" -m pip install --upgrade --no-deps transformers==4.57.3
+if errorlevel 1 (
+    echo.
+    echo WARNING: Failed to pin transformers to 4.57.3. You may see dependency warnings.
+)
+echo.
+
+echo.
 echo.
 echo Installing flash-attn
 if "%HAS_NVIDIA_GPU%"=="1" (
@@ -177,7 +204,7 @@ echo Creating start script
  echo set "ARGS="
  echo.
  echo echo ========================================
- echo echo Qwen Voice TTS Studio 1.0  - Startup
+ echo echo Qwen Voice TTS Studio 1.1  - Startup
  echo echo ========================================
  echo echo.
  echo.

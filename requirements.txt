@@ -6,3 +6,4 @@ pydub
 huggingface-hub
 transformers>=4.46.0,<5
 accelerate>=0.34.0
+pytz

@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "========================================"
-echo "Qwen Voice TTS Studio 1.0  - Setup Script (Linux)"
+echo "Qwen Voice TTS Studio 1.1  - Setup Script (Linux)"
 echo "========================================"
 echo
 
@@ -69,6 +69,27 @@ fi
 echo
 echo "Installing requirements"
 python -m pip install -r "$SCRIPT_DIR/requirements.txt"
+
+echo
+echo "Installing pytz (required by gradio)"
+python -m pip install -U pytz || {
+  echo
+  echo "WARNING: pytz install failed. Gradio may fail to import."
+}
+
+echo
+echo "Installing qwen-asr (for Voice ASR tab)"
+python -m pip install -U qwen-asr || {
+  echo
+  echo "WARNING: qwen-asr install failed. Voice ASR tab will prompt you to install it manually."
+}
+
+echo
+echo "Pinning transformers==4.57.3 (required by qwen-tts)"
+python -m pip install --upgrade --no-deps transformers==4.57.3 || {
+  echo
+  echo "WARNING: Failed to pin transformers to 4.57.3. You may see dependency warnings."
+}
 
 echo
 echo "Installing flash-attn"

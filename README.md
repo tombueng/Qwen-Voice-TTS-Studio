@@ -1,4 +1,4 @@
-# Qwen Voice TTS Studio 1.0
+# Qwen Voice TTS Studio 1.1
 <img width="848" height="352" alt="image" src="https://github.com/user-attachments/assets/cbf18fef-cbc6-442b-90bd-0674fe3b5d35" />
 
 A Windows-first, user-friendly Gradio GUI for **Qwen3-TTS**.
@@ -6,6 +6,7 @@ A Windows-first, user-friendly Gradio GUI for **Qwen3-TTS**.
 - Text-to-Speech
 - Voice Cloning
 - Voice Design
+- Voice ASR (Speech-to-Text)
 - Conversations
 - Audio Library
 - Saved cloned/designed voices for reuse
@@ -88,6 +89,14 @@ Run:
 - Select up to 3 voices
 - Write a script using tags like `[Voice1]`, `[Voice2]`, `[Voice3]`
 - Generates all parts and merges them into a single WAV output
+
+### Voice ASR (Speech-to-Text)
+
+- Upload audio or record from microphone
+- Transcribe audio to text using Qwen3-ASR
+- Auto-saves transcripts to `./outputs` (timestamped filenames)
+- Optional timestamps output (requires Forced Aligner model)
+- Optional re-voice: synthesize the transcript back into speech using any selected TTS voice
 
 ### Voice Samples
 
