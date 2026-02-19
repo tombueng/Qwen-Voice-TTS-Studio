@@ -13,6 +13,13 @@ import shutil
 import subprocess
 from transformers.utils.import_utils import is_flash_attn_2_available
 import socket
+import json
+from datetime import datetime
+import soundfile as sf
+import gradio as gr
+from pathlib import Path
+
+
 
 os.environ['HF_HOME'] = str(Path(__file__).parent / "models")
 
@@ -728,6 +735,7 @@ class QwenVoiceGUI:
         return ["Auto", "Chinese", "English", "Japanese", "Korean", "German", "French", "Russian", "Portuguese", "Spanish", "Italian"]
     
     def generate_tts(self, text, language, speaker, instruct, save_name=None, progress=gr.Progress()):
+        print(f"DEBUG: generate_tts")
         try:
             if not text.strip():
                 return None, "Please enter text to synthesize"
@@ -834,19 +842,198 @@ class QwenVoiceGUI:
         except Exception as e:
             return None, f"✗ Error: {str(e)}"
     
-    def clone_voice(self, audio_file, ref_text, target_text, language, voice_name, save_name=None, progress=gr.Progress()):
+    def clone_voice(self, audio_file, ref_text, target_text, language, voice_name, save_name=None, progress=gr.Progress(), from_json=False):
+        print("========== DEBUG: clone_voice called ==========")
+
         try:
-            if audio_file is None:
-                return None, "Please upload a reference audio file", gr.update()
-            
             if not target_text.strip():
                 return None, "Please enter text to synthesize", gr.update()
-            
+
+
+
+
+            # ==========================================================
+            # ROBUST JSON DETECTION
+            # ==========================================================
+            is_json = False
+            data = None
+
+            print(f"DEBUG: target_text type = {type(target_text)}")
+
+            # Fall 1: Bereits Dictionary (Gradio JSON Component)
+            if isinstance(target_text, dict):
+                print("DEBUG: target_text already dict")
+                if "scenes" in target_text and "speaker" in target_text:
+                    is_json = True
+                    data = target_text
+                    print("DEBUG: JSON detected (dict input)")
+
+            # Fall 2: String → versuchen zu parsen
+            elif isinstance(target_text, str):
+                try:
+                    parsed = json.loads(target_text)
+                    print("DEBUG: json.loads successful")
+
+                    if isinstance(parsed, dict) and "scenes" in parsed and "speaker" in parsed:
+                        is_json = True
+                        data = parsed
+                        print("DEBUG: JSON detected (string input)")
+
+                except Exception as e:
+                    print("DEBUG: json.loads failed:", str(e))
+
+
+
+
+            # ==========================================================
+            # JSON MODE
+            # ==========================================================
+            if is_json:
+
+                progress(0.1, desc="Loading model...")
+                status = self.load_base_model()
+                if "Error" in status:
+                    return None, status, gr.update()
+
+                # Speaker-Mapping
+                speaker_map = {}
+                for spk in data["speaker"]:
+                    name = spk.get("name")
+                    if not name:
+                        continue
+
+                    speaker_map[name] = {
+                        "ref_audio": spk.get("ref_audio"),
+                        "ref_text": spk.get("ref_text")
+                    }
+
+                    print(f"DEBUG: Speaker loaded: {name}")
+
+
+                print("========== DEBUG SPEAKER MAP ==========")
+
+                for name, info in speaker_map.items():
+                    print(f"Speaker: {name}")
+                    print("  Keys:", list(info.keys()))
+                    print("  ref_audio:", info.get("ref_audio"))
+                    print("  Exists as file:", os.path.isfile(info.get("ref_audio", "")))
+                    print("---------------------------------------")
+
+
+                generated_files = []
+                total_dialogs = sum(len(scene.get("dialog", [])) for scene in data["scenes"])
+                processed = 0
+
+                for scene in data["scenes"]:
+                    scene_number = scene.get("pos")
+                    print(f"\nDEBUG: Processing Scene {scene_number}")
+
+                    for dialog in scene.get("dialog", []):
+
+                        spk = dialog.get("speaker")
+                        pos = dialog.get("pos")
+                        dlg_text = dialog.get("text", "")
+
+                        # 🔴 REGIE FILTERN
+                        if not spk or spk.lower() == "instruction":
+                            print(f"DEBUG: Skipping dialog {pos} (regie)")
+                            continue
+
+                        if spk not in speaker_map:
+                            print(f"WARNING: No reference defined for speaker {spk}")
+                            continue
+
+                        print(f"DEBUG: Cloning Scene {scene_number}, Dialog {pos}, Speaker {spk}")
+
+                        ref_audio_path = self.resolve_audio_path(speaker_map[spk]["ref_audio"])
+                        ref_text_spk = speaker_map[spk]["ref_text"]
+                        
+                        # ==========================================================
+                        # REF TEXT ALS DATEIPFAD BEHANDELN
+                        # ==========================================================
+                        if ref_text_spk:
+                            ref_text_spk = ref_text_spk.strip()
+                            if os.path.isfile(ref_text_spk):
+                                print(f"DEBUG: Loading ref_text from file: {ref_text_spk}")
+                                try:
+                                    with open(ref_text_spk, "r", encoding="utf-8") as f:
+                                        ref_text_spk = f.read().strip()
+                                    print("DEBUG: ref_text successfully loaded from file")
+                                except Exception as e:
+                                    print("ERROR reading ref_text file:", str(e))
+                                    ref_text_spk = None
+                            else:
+                                print("DEBUG: ref_text is not a file path, using raw text")
+
+                        wavs, sr = self.base_model.generate_voice_clone(
+                            text=dlg_text,
+                            language=language if language != "Auto" else None,
+                            ref_audio=ref_audio_path,
+                            ref_text=ref_text_spk if ref_text_spk and ref_text_spk.strip() else None,
+                            x_vector_only_mode=not (ref_text_spk and ref_text_spk.strip()),
+                        )
+
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = self.make_output_filename(
+                            f"{save_name or 'json'}_scene{scene_number}_pos{pos}",
+                            timestamp,
+                            "wav"
+                        )
+                        filepath = self.output_dir / filename
+
+                        sf.write(str(filepath), wavs[0], sr)
+
+                        print(f"DEBUG: Saved {filename}")
+                        generated_files.append(filepath)
+
+                        processed += 1
+                        progress(0.1 + 0.7 * (processed / total_dialogs),
+                                 desc=f"Rendering {processed}/{total_dialogs}")
+
+                # ==========================================================
+                # MERGE
+                # ==========================================================
+                print("\nDEBUG: Merging all files...")
+
+                merged_audio = []
+                merged_sr = None
+
+                for f in generated_files:
+                    print(f"DEBUG: Reading {f}")
+                    data_audio, sr = sf.read(f)
+                    merged_audio.append(data_audio)
+                    if merged_sr is None:
+                        merged_sr = sr
+
+                if not merged_audio:
+                    return None, "✗ No audio generated", gr.update()
+
+                merged_audio_np = np.concatenate(merged_audio, axis=0)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                merged_filename = f"{save_name or 'merged'}_{timestamp}.wav"
+                merged_filepath = self.output_dir / merged_filename
+
+                sf.write(str(merged_filepath), merged_audio_np, merged_sr)
+
+                progress(1.0, desc="Complete!")
+
+                print(f"DEBUG: Final merged file: {merged_filename}")
+                print("========== DEBUG: Finished JSON clone ==========")
+
+                return str(merged_filepath), f"✓ JSON cloned and merged: {merged_filename}", gr.update()
+
+            # ==========================================================
+            # NORMAL SINGLE CLONE MODE (unchanged behavior)
+            # ==========================================================
+
+            if audio_file is None:
+                return None, "Please upload a reference audio file", gr.update()
+
             progress(0.2, desc="Loading model...")
             status = self.load_base_model()
             if "Error" in status:
                 return None, status, gr.update()
-            
+
             progress(0.4, desc="Processing reference audio...")
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -862,7 +1049,7 @@ class QwenVoiceGUI:
                 audio.export(str(ref_dest), format="wav")
 
             audio_path = str(ref_dest)
-            
+
             progress(0.6, desc="Cloning voice...")
             wavs, sr = self.base_model.generate_voice_clone(
                 text=target_text,
@@ -871,152 +1058,367 @@ class QwenVoiceGUI:
                 ref_text=ref_text if ref_text.strip() else None,
                 x_vector_only_mode=not ref_text.strip(),
             )
-            
+
             progress(0.8, desc="Saving audio...")
             filename = self.make_output_filename(save_name or voice_name or "clone", timestamp, "wav")
             filepath = self.output_dir / filename
-            
+
             sf.write(str(filepath), wavs[0], sr)
-            
-            self.audio_history.append({
-                "filename": filename,
-                "filepath": str(filepath),
-                "text": target_text,
-                "timestamp": timestamp,
-                "type": "Clone"
-            })
-            
-            if voice_name.strip():
-                progress(0.9, desc="Saving voice profile...")
-                prompt_items = self.base_model.create_voice_clone_prompt(
-                    ref_audio=audio_path,
-                    ref_text=ref_text if ref_text.strip() else None,
-                    x_vector_only_mode=not ref_text.strip(),
-                )
-                
-                voice_data = {
-                    "name": voice_name,
-                    "ref_audio": str((self.voiceinputs_dir / ref_filename).as_posix()),
-                    "ref_text": ref_text,
-                    "timestamp": timestamp
-                }
-                
-                self.cloned_voices[voice_name] = voice_data
-                self.save_cloned_voices()
-            
+
             progress(1.0, desc="Complete!")
-            cloned_list = list(self.cloned_voices.keys())
-            return str(filepath), f"✓ Voice cloned successfully: {filename}", gr.update(choices=cloned_list, value=cloned_list[0] if cloned_list else None)
-            
+
+            print("========== DEBUG: Finished single clone ==========")
+
+            return str(filepath), f"✓ Voice cloned successfully: {filename}", gr.update()
+
         except Exception as e:
+            print("ERROR:", str(e))
+            traceback.print_exc()
             return None, f"✗ Error: {str(e)}", gr.update()
+
     
-    def generate_with_cloned_voice(self, voice_name, text, language, save_name=None, progress=gr.Progress()):
+    def generate_with_cloned_voice(self, voice_name, text, language, save_name=None, progress=gr.Progress(), from_json=False):
+        print(f"DEBUG: generate_with_cloned_voice")
         try:
-            if not voice_name:
-                return None, "Please select a cloned voice"
-            
+            print("========== DEBUG: generate_with_cloned_voice called ==========")
+
             if not text.strip():
                 return None, "Please enter text to synthesize"
-            
+
+            # JSON ERKENNEN (nur beim ersten Aufruf)
+            is_json = False
+            data = None
+
+            if not from_json:
+                try:
+                    data = json.loads(text)
+                    if "scenes" in data and "speaker" in data:
+                        is_json = True
+                        print("DEBUG: JSON detected")
+                except Exception as e:
+                    print("DEBUG: Not JSON input:", str(e))
+
+            # ============================================
+            # JSON MODE
+            # ============================================
+            if is_json:
+
+                progress(0.1, desc="Loading model...")
+                status = self.load_base_model()
+                if "Error" in status:
+                    return None, status
+
+                # speaker-Mapping aufbauen
+                speaker_map = {}
+                for spk in data["speaker"]:
+                    name = spk.get("name")
+                    if not name:
+                        continue
+                    speaker_map[name] = {
+                        "ref_audio": spk.get("reference-audio"),
+                        "ref_text": spk.get("reference-text")
+                    }
+                    print(f"DEBUG: Speaker loaded: {name}")
+
+                generated_files = []
+                total_dialogs = sum(len(scene.get("dialog", [])) for scene in data["scenes"])
+                processed = 0
+
+                for scene in data["scenes"]:
+                    scene_number = scene.get("pos")
+                    print(f"\nDEBUG: Processing Scene {scene_number}")
+
+                    for dialog in scene.get("dialog", []):
+
+                        spk = dialog.get("speaker")
+                        pos = dialog.get("pos")
+                        dlg_text = dialog.get("text", "")
+
+                        # 🔴 direction FILTERN
+                        if not spk or spk.lower() == "direction":
+                            print(f"DEBUG: Skipping dialog {pos} (direction)")
+                            continue
+
+                        if spk not in speaker_map:
+                            print(f"WARNING: No reference defined for speaker {spk}")
+                            continue
+
+                        print(f"DEBUG: Rendering Scene {scene_number}, Dialog {pos}, Speaker {spk}")
+
+                        ref_audio = self.resolve_audio_path(speaker_map[spk]["ref_audio"])
+                        ref_text = speaker_map[spk]["ref_text"]
+
+                        prompt_items = self.base_model.create_voice_clone_prompt(
+                            ref_audio=ref_audio,
+                            ref_text=ref_text,
+                            x_vector_only_mode=not ref_text,
+                        )
+
+                        wavs, sr = self.base_model.generate_voice_clone(
+                            text=dlg_text,
+                            language=language if language != "Auto" else None,
+                            voice_clone_prompt=prompt_items,
+                        )
+
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = self.make_output_filename(
+                            f"{save_name or 'json'}_scene{scene_number}_pos{pos}",
+                            timestamp,
+                            "wav"
+                        )
+                        filepath = self.output_dir / filename
+
+                        sf.write(str(filepath), wavs[0], sr)
+
+                        print(f"DEBUG: Saved {filename}")
+                        generated_files.append(filepath)
+
+                        processed += 1
+                        progress(0.1 + 0.7 * (processed / total_dialogs),
+                                 desc=f"Rendering {processed}/{total_dialogs}")
+
+                # ============================================
+                # MERGE
+                # ============================================
+                print("\nDEBUG: Merging all files...")
+                merged_audio = []
+                merged_sr = None
+
+                for f in generated_files:
+                    data_audio, sr = sf.read(f)
+                    merged_audio.append(data_audio)
+                    if merged_sr is None:
+                        merged_sr = sr
+
+                if not merged_audio:
+                    return None, "✗ No audio generated"
+
+                merged_audio_np = np.concatenate(merged_audio, axis=0)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                merged_filename = f"{save_name or 'merged'}_{timestamp}.wav"
+                merged_filepath = self.output_dir / merged_filename
+
+                sf.write(str(merged_filepath), merged_audio_np, merged_sr)
+
+                progress(1.0, desc="Complete!")
+
+                print(f"DEBUG: Final merged file: {merged_filename}")
+                print("========== DEBUG: Finished ==========")
+
+                return str(merged_filepath), f"✓ JSON rendered and merged: {merged_filename}"
+
+            # ============================================
+            # NORMAL MODE (unchanged)
+            # ============================================
+
+            if not voice_name:
+                return None, "Please select a cloned voice"
+
             if voice_name not in self.cloned_voices:
                 return None, "Selected voice not found"
-            
+
             progress(0.2, desc="Loading model...")
             status = self.load_base_model()
             if "Error" in status:
                 return None, status
-            
+
             voice_data = self.cloned_voices[voice_name]
             ref_audio = self.resolve_audio_path(voice_data.get("ref_audio"))
-            
+
             progress(0.4, desc="Loading voice profile...")
             prompt_items = self.base_model.create_voice_clone_prompt(
                 ref_audio=ref_audio,
                 ref_text=voice_data.get("ref_text"),
                 x_vector_only_mode=not voice_data.get("ref_text"),
             )
-            
+
             progress(0.6, desc="Generating speech...")
             wavs, sr = self.base_model.generate_voice_clone(
                 text=text,
                 language=language if language != "Auto" else None,
                 voice_clone_prompt=prompt_items,
             )
-            
+
             progress(0.8, desc="Saving audio...")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = self.make_output_filename(save_name or voice_name, timestamp, "wav")
             filepath = self.output_dir / filename
-            
+
             sf.write(str(filepath), wavs[0], sr)
-            
-            self.audio_history.append({
-                "filename": filename,
-                "filepath": str(filepath),
-                "text": text,
-                "voice": voice_name,
-                "timestamp": timestamp,
-                "type": "Cloned Voice"
-            })
-            
+
             progress(1.0, desc="Complete!")
+
             return str(filepath), f"✓ Audio generated with cloned voice: {filename}"
-            
+
         except Exception as e:
+            print("ERROR:", str(e))
+            traceback.print_exc()
             return None, f"✗ Error: {str(e)}"
-    
-    def design_voice(self, text, language, instruct, voice_name, save_name=None, progress=gr.Progress()):
+
+    def design_voice(self, text, language, instruct, voice_name, save_name=None, progress=gr.Progress(), from_json=False, speaker_voices=None):
+        print(f"DEBUG: design_voice")
+        """
+        speaker_voices: dict mapping speaker name -> voice description from JSON
+        """
         try:
+            print("========== DEBUG: design_voice called ==========")
+            print(f"DEBUG: Input text length = {len(text)}")
+            print(f"DEBUG: Input save_name = {save_name}, voice_name = {voice_name}")
+
+            if speaker_voices is None:
+                speaker_voices = {}
+
             if not text.strip():
+                print("DEBUG: Empty text detected")
                 return None, "Please enter text to synthesize", gr.update()
             
             if not instruct.strip():
+                print("DEBUG: Empty instruction detected")
                 return None, "Please provide voice design instructions", gr.update()
             
-            progress(0.2, desc="Loading model...")
-            status = self.load_design_model()
-            if "Error" in status:
-                return None, status, gr.update()
+            # JSON erkennen, nur wenn from_json=False
+            is_json = False
+            data = None
+            if not from_json:
+                try:
+                    data = json.loads(text)
+                    if "scenes" in data and "speaker" in data:
+                        is_json = True
+                        print("DEBUG: JSON input detected")
+                        # Build mapping: speaker name -> voice description
+                        for spk in data["speaker"]:
+                            speaker_voices[spk["name"]] = spk.get("Stimme", "")
+                except Exception as e:
+                    print("DEBUG: Input is not JSON:", str(e))
             
-            progress(0.5, desc="Designing voice...")
-            wavs, sr = self.design_model.generate_voice_design(
-                text=text,
-                language=language if language != "Auto" else None,
-                instruct=instruct,
-            )
+            generated_files = []
             
-            progress(0.8, desc="Saving audio...")
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = self.make_output_filename(save_name or voice_name or "design", timestamp, "wav")
-            filepath = self.output_dir / filename
+            if is_json:
+                print("DEBUG: Processing JSON scenes...")
+                for scene in data["scenes"]:
+                    scene_number = scene.get("pos")
+                    scene_title = scene.get("title", f"Scene_{scene_number}")
+                    dialogs = scene.get("dialog", [])
+                    print(f"DEBUG: Scene {scene_number} titled '{scene_title}' with {len(dialogs)} dialogs")
+                    
+                    for dialog in dialogs:
+                        pos = dialog.get("pos")
+                        spk = dialog.get("speaker")
+                        conotation = dialog.get("conotation", "")
+                        dlg_text = dialog.get("text", "")
+
+                        # 🔴 direction FILTERN
+                        if not spk or spk.lower() == "direction":
+                            print(f"DEBUG: Skipping dialog {pos} because speaker is 'direction'")
+                            continue
+
+                        voice_desc = speaker_voices.get(spk, "")
+
+                        full_instruct = f"{instruct} (Character: {spk}, Expression: {conotation}, Voice: {voice_desc})"
+
+                        print(f"\n--- DEBUG: Rendering scene {scene_number}, dialog {pos} ---")
+                        print(f"Speaker: {spk}")
+                        print(f"Expression: {conotation}")
+                        print(f"Voice: {voice_desc}")
+                        print(f"Text: {dlg_text}")
+                        print(f"Instruct: {full_instruct}")
+
+                        file_path, status_msg, _ = self.design_voice(
+                            text=dlg_text,
+                            language=language,
+                            instruct=full_instruct,
+                            voice_name=voice_name,
+                            save_name=f"{save_name}_scene{scene_number}_pos{pos}" if save_name else None,
+                            progress=progress,
+                            from_json=True,
+                            speaker_voices=speaker_voices
+                        )
+
+                        print(f"DEBUG: Generated file for dialog {pos}: {file_path}")
+                        generated_files.append(file_path)
+
+                
+                # Merge aller generierten Dialoge
+                print("\nDEBUG: Merging all generated files...")
+                merged_audio = []
+                merged_sr = None
+                for f in generated_files:
+                    print(f"DEBUG: Reading file {f}")
+                    data, sr = sf.read(f)
+                    merged_audio.append(data)
+                    if merged_sr is None:
+                        merged_sr = sr
+                    elif merged_sr != sr:
+                        print(f"WARNING: Sample rates differ for file {f}. Resampling may be required.")
+                
+                if merged_audio:
+                    merged_audio_np = np.concatenate(merged_audio, axis=0)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    merged_filename = f"{save_name or 'merged_output'}_{timestamp}.wav"
+                    merged_filepath = self.output_dir / merged_filename
+                    sf.write(str(merged_filepath), merged_audio_np, merged_sr)
+                    print(f"DEBUG: All files merged into {merged_filename}")
+                    print("========== DEBUG: design_voice finished ==========")
+                    return merged_filepath, f"✓ All dialogues rendered and merged: {merged_filename}", gr.update()
+                
+                print("DEBUG: No audio files were generated from JSON")
+                return None, "✗ No audio files were generated", gr.update()
             
-            sf.write(str(filepath), wavs[0], sr)
-            
-            self.audio_history.append({
-                "filename": filename,
-                "filepath": str(filepath),
-                "text": text,
-                "instruct": instruct,
-                "timestamp": timestamp,
-                "type": "Voice Design"
-            })
-            
-            if voice_name.strip():
-                progress(0.9, desc="Saving voice profile...")
-                voice_data = {
-                    "name": voice_name,
+            else:
+                # Normale Textverarbeitung
+                print("DEBUG: Processing plain text voice design")
+                progress(0.2, desc="Loading model...")
+                status = self.load_design_model()
+                print(f"DEBUG: Model load status: {status}")
+                if "Error" in status:
+                    return None, status, gr.update()
+                
+                progress(0.5, desc="Designing voice...")
+                print("DEBUG: Generating voice design...")
+                wavs, sr = self.design_model.generate_voice_design(
+                    text=text,
+                    language=language if language != "Auto" else None,
+                    instruct=instruct,
+                )
+                print(f"DEBUG: Generated audio length: {len(wavs[0])} samples, Sample rate: {sr}")
+                
+                progress(0.8, desc="Saving audio...")
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = self.make_output_filename(save_name or voice_name or "design", timestamp, "wav")
+                filepath = self.output_dir / filename
+                sf.write(str(filepath), wavs[0], sr)
+                print(f"DEBUG: Saved audio to {filepath}")
+                
+                self.audio_history.append({
+                    "filename": filename,
+                    "filepath": str(filepath),
+                    "text": text,
                     "instruct": instruct,
-                    "timestamp": timestamp
-                }
-                self.designed_voices[voice_name] = voice_data
-                self.save_designed_voices()
-            
-            progress(1.0, desc="Complete!")
-            designed_list = list(self.designed_voices.keys())
-            return str(filepath), f"✓ Voice designed successfully: {filename}", gr.update(choices=designed_list, value=designed_list[0] if designed_list else None)
+                    "timestamp": timestamp,
+                    "type": "Voice Design"
+                })
+                
+                if voice_name.strip():
+                    progress(0.9, desc="Saving voice profile...")
+                    voice_data = {
+                        "name": voice_name,
+                        "instruct": instruct,
+                        "timestamp": timestamp
+                    }
+                    self.designed_voices[voice_name] = voice_data
+                    self.save_designed_voices()
+                    print(f"DEBUG: Saved voice profile for {voice_name}")
+                
+                progress(1.0, desc="Complete!")
+                designed_list = list(self.designed_voices.keys())
+                print("========== DEBUG: design_voice finished ==========")
+                return str(filepath), f"✓ Voice designed successfully: {filename}", gr.update(
+                    choices=designed_list, value=designed_list[0] if designed_list else None
+                )
             
         except Exception as e:
+            print("ERROR in design_voice:")
+            traceback.print_exc()
             return None, f"✗ Error: {str(e)}", gr.update()
     
     def get_audio_library_files(self):
