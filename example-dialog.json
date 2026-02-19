@@ -1,0 +1,20 @@
+{
+  "speaker": [
+    {"name": "Merz", "ref_audio": "voices\\merz.mp3"},
+    {"name": "Merkel","ref_audio": "voices\\merkel.mp3"},
+    {"name": "Scholz","ref_audio": "voices\\scholz.mp3"},
+    {"name": "Trump","ref_audio": "voices\\trump.mp3"}
+  ],
+  "scenes": [
+    {
+      "pos": 1,
+      "title": "Test",
+      "dialog": [
+        {"pos": 1, "speaker": "Merkel", "text": "Hallo, ich bin die Angie! Man, sehe ich heute wieder gut aus!"},
+        {"pos": 2, "speaker": "Merz", "text": "Hallo Angela, ich sehe aber wie immer besser aus, außer in Umfragen."},
+        {"pos": 3, "speaker": "Scholz", "text": "Hallo zusammen, habe ich was irgendwas verpasst?"},
+        {"pos": 4, "speaker": "Trump", "text": "Hi folks, Yeah you missed a lot. I will be the greates of all kings!"}
+      ]
+    }
+  ]
+}
