@@ -3,7 +3,7 @@
 
 A Windows-first, user-friendly Gradio GUI for **Qwen3-TTS**.
 
-- Text-to-Speech
+- Text-to-Speech with 33 voices (built-in, designed, and celebrity clones)
 - Voice Cloning
 - Voice Design
 - Voice ASR (Speech-to-Text)
@@ -14,6 +14,7 @@ A Windows-first, user-friendly Gradio GUI for **Qwen3-TTS**.
 - Portable cloned voice references (stored in `./voiceinputs`)
 - Save-name option for outputs (filename prefix + timestamp)
 - Download outputs as WAV or MP3
+- **No ffmpeg/sox required** — audio pipeline runs on soundfile + librosa only
 
 Project GitHub:
 https://github.com/Starnodes2024/Qwen-Voice-TTS-Studio
@@ -67,13 +68,23 @@ Run:
 
 ### Text-to-Speech
 
-- 20 Built-in voices
-- Optional instructions to control style
+The voice selector is a clickable table showing **Name**, **Type**, **Gender**, and **Description**.
+Three voice types are available:
+
+| Type | Count | Description |
+|------|------:|-------------|
+| Built-in | 9 | Named speaker IDs from the CustomVoice model (Aiden, Dylan, Eric, …) |
+| Designed | 19 | Voices created from text style instructions (Emma, James, Rachel, …) |
+| Clone | 5 | Celebrity voices from reference audio (Merkel, Trump, Scholz, …) |
+
+The voice library is defined in `main_voices.json` — edit it to add, remove, or customise voices.
+
 - Optional save name for output filename prefix
 
 ### Voice Cloning
 
-- Upload WAV or MP3 reference
+- Upload WAV or MP3 reference (no ffmpeg required — soundfile reads both natively)
+- Reference audio is automatically resampled to 24 kHz for the model
 - Save cloned voices for later reuse (no need to re-upload)
 - Reference audio is stored in `./voiceinputs` so cloned voices stay portable
 - Optional save name for output filename prefix
@@ -121,9 +132,29 @@ Changing it reloads models on the selected device.
 
 ## Requirements
 
-- Windows: repo includes embedded Python **3.12** under `./312`
-- Disk space:
-  - models are ~10-12GB total
+- **Python 3.12** — install from [python.org](https://www.python.org/downloads/) and check *"Add Python to PATH"* during setup
+- Disk space: models are ~10-14 GB total
+- **No ffmpeg, ffprobe, sox, or pydub** — the audio pipeline uses `soundfile` (native MP3/WAV/FLAC via libsndfile) and `librosa` only
+
+## Model Download
+
+Models are downloaded on first use and cached in `./models/`. To pre-download all models before running the UI:
+
+```
+python download_models.py
+```
+
+Options:
+
+```
+python download_models.py --custom    # CustomVoice model only
+python download_models.py --base      # Base (voice cloning) only
+python download_models.py --design    # VoiceDesign only
+python download_models.py --asr       # ASR only
+python download_models.py --models-dir D:/ml/models   # custom output directory
+```
+
+The app checks for a local `./models/<model-name>` directory first; it only hits the network if the directory is missing or empty.
 
 ## Screenshots
 <img width="2256" height="1236" alt="Screenshot 2026-01-26 144955" src="https://github.com/user-attachments/assets/aeb48aa8-95be-4a1e-bbc9-e8a96b8a3bc1" />
@@ -140,11 +171,14 @@ Changing it reloads models on the selected device.
 
 Key paths used by the app:
 
-- `./models` (HF cache + downloaded models)
+- `./models` (downloaded models — pre-populate with `download_models.py`)
 - `./outputs` (generated audio)
+- `./voiceinputs` (reference audio for cloned voices, auto-resampled to 24 kHz)
 - `./cloned_voices` (saved cloned voice metadata)
 - `./designed_voices` (saved designed voice metadata)
 - `./voicesamples` (MP3 preview samples)
+- `./voices` (reference MP3s + transcripts for built-in clone voices)
+- `main_voices.json` (voice library — edit to add/remove/customise voices)
 
 ## License
 

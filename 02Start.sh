@@ -43,7 +43,7 @@ fi
 
 echo
 echo "Launch command:"
-echo "python $SCRIPT_DIR/qwen_voice_gui.py ${ARGS[*]}"
+echo "python $SCRIPT_DIR/main.py ${ARGS[*]}"
 echo
 
-python "$SCRIPT_DIR/qwen_voice_gui.py" "${ARGS[@]}"
+python "$SCRIPT_DIR/main.py" "${ARGS[@]}"

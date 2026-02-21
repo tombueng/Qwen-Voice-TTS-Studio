@@ -2,7 +2,7 @@ qwen-tts
 soundfile
 numpy
 gradio
-pydub
+librosa
 huggingface-hub
 transformers>=4.46.0,<5
 accelerate>=0.34.0

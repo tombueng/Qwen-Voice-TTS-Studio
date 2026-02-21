@@ -1,0 +1,30 @@
+# ── Python runtime ────────────────────────────────────────────────────────────
+# Install Python 3.12 from https://www.python.org/downloads/ instead
+312/
+
+# ── Virtual environment ───────────────────────────────────────────────────────
+venv/
+
+# ── Python bytecode ───────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Downloaded models (~10-12 GB — use download_models.py to fetch) ───────────
+models/
+
+# ── Generated audio outputs ───────────────────────────────────────────────────
+outputs/
+voicesamples/
+test_roundtrip/
+
+# ── Runtime-generated voice data ──────────────────────────────────────────────
+designed_voices/
+cloned_voices/
+uservoices/
+user_voices.json
+
+# ── IDE / tools ───────────────────────────────────────────────────────────────
+.idea/
+.vscode/launch.json
+.claude/

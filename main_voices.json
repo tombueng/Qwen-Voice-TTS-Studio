@@ -1,35 +1,273 @@
 {
   "voices": [
-    "Vivian",
-    "Serena",
-    "Ono Anna",
-    "Sohee",
-    "Ryan",
-    "Aiden",
-    "Dylan",
-    "Eric",
-    "Uncle Fu",
-    "Emma",
-    "Lily",
-    "Sophia",
-    "Ava",
-    "Grace",
-    "Mia",
-    "Claire",
-    "Nina",
-    "Rachel",
-    "Olivia",
-    "James",
-    "Ethan",
-    "Michael",
-    "Lucas",
-    "David",
-    "Noah",
-    "Henry",
-    "Thomas",
-    "Leo",
-    "Spongebob",
-    "Grindhouse",
-    "DokuPeter"
+    {
+      "name": "Vivian",
+      "age": 28,
+      "gender": "Female",
+      "desc": "Warm female voice, versatile for various content",
+      "model": "custom",
+      "speaker": "vivian"
+    },
+    {
+      "name": "Serena",
+      "age": 32,
+      "gender": "Female",
+      "desc": "Professional female voice, clear and authoritative",
+      "model": "custom",
+      "speaker": "serena"
+    },
+    {
+      "name": "Ono Anna",
+      "age": 25,
+      "gender": "Female",
+      "desc": "Youthful female voice, energetic and friendly",
+      "model": "custom",
+      "speaker": "ono_anna"
+    },
+    {
+      "name": "Sohee",
+      "age": 30,
+      "gender": "Female",
+      "desc": "Expressive female voice, dynamic and engaging",
+      "model": "custom",
+      "speaker": "sohee"
+    },
+    {
+      "name": "Ryan",
+      "age": 35,
+      "gender": "Male",
+      "desc": "Technical male voice, precise for explanations",
+      "model": "custom",
+      "speaker": "ryan"
+    },
+    {
+      "name": "Aiden",
+      "age": 27,
+      "gender": "Male",
+      "desc": "Friendly male voice, approachable and warm",
+      "model": "custom",
+      "speaker": "aiden"
+    },
+    {
+      "name": "Dylan",
+      "age": 34,
+      "gender": "Male",
+      "desc": "Expressive male voice, dynamic for storytelling",
+      "model": "custom",
+      "speaker": "dylan"
+    },
+    {
+      "name": "Eric",
+      "age": 42,
+      "gender": "Male",
+      "desc": "Trustworthy male voice, deep and authoritative",
+      "model": "custom",
+      "speaker": "eric"
+    },
+    {
+      "name": "Uncle Fu",
+      "age": 58,
+      "gender": "Male",
+      "desc": "Mature male voice, wise and experienced",
+      "model": "custom",
+      "speaker": "uncle_fu"
+    },
+    {
+      "name": "Emma",
+      "age": 36,
+      "gender": "Female",
+      "desc": "Warm long-form narrator, 180-210 Hz, perfect for audiobooks and documentaries",
+      "model": "design",
+      "instruct": "Female, 36 years old, warm and rich voice, honey-toned with slight husky undertone, slow pacing, emotionally warm but controlled"
+    },
+    {
+      "name": "Lily",
+      "age": 25,
+      "gender": "Female",
+      "desc": "Friendly digital assistant, 220-250 Hz, bright and energetic for UI interactions",
+      "model": "design",
+      "instruct": "Female, 25 years old, bright and clear voice, sparkly and energetic, quick pacing, cheerful and helpful tone"
+    },
+    {
+      "name": "Sophia",
+      "age": 44,
+      "gender": "Female",
+      "desc": "Professional analyst, 190-220 Hz, authoritative for business and technical content",
+      "model": "design",
+      "instruct": "Female, 44 years old, firm authoritative voice, neutral and clinical precision, measured pacing, composed and factual tone"
+    },
+    {
+      "name": "Ava",
+      "age": 32,
+      "gender": "Female",
+      "desc": "Expressive story performer, 200-240 Hz, theatrical and character-capable",
+      "model": "design",
+      "instruct": "Female, 32 years old, theatrical expressive voice, adaptable resonance, dynamic pacing, full emotional range"
+    },
+    {
+      "name": "Grace",
+      "age": 52,
+      "gender": "Female",
+      "desc": "Empathetic mentor, 170-195 Hz, nurturing and reassuring for educational content",
+      "model": "design",
+      "instruct": "Female, 52 years old, warm deep motherly voice, velvety with mature richness, slow patient pacing, nurturing and reassuring tone"
+    },
+    {
+      "name": "Mia",
+      "age": 21,
+      "gender": "Female",
+      "desc": "Youthful social voice, 235-270 Hz, playful and contemporary for social media",
+      "model": "design",
+      "instruct": "Female, 21 years old, playful bubbly voice, bright and youthful, fast energetic pacing, cheerful and casual tone"
+    },
+    {
+      "name": "Claire",
+      "age": 39,
+      "gender": "Female",
+      "desc": "British RP elegant voice, 195-225 Hz, sophisticated for luxury brands",
+      "model": "design",
+      "instruct": "Female, 39 years old, British RP elegant voice, sophisticated and polished, measured refined pacing, composed elegance"
+    },
+    {
+      "name": "Nina",
+      "age": 30,
+      "gender": "Female",
+      "desc": "Technical explainer, 205-230 Hz, precise and intelligent for tutorials",
+      "model": "design",
+      "instruct": "Female, 30 years old, clear direct voice, precise and analytical, slightly fast pacing, focused and competent tone"
+    },
+    {
+      "name": "Rachel",
+      "age": 47,
+      "gender": "Female",
+      "desc": "News anchor, 185-210 Hz, authoritative and credible for broadcasts",
+      "model": "design",
+      "instruct": "Female, 47 years old, strong authoritative voice, professional and commanding, steady measured pacing, composed objectivity"
+    },
+    {
+      "name": "Olivia",
+      "age": 28,
+      "gender": "Female",
+      "desc": "Soft ASMR & wellness voice, 195-220 Hz, calming for meditation and relaxation",
+      "model": "design",
+      "instruct": "Female, 28 years old, soft breathy voice, gentle and soothing, very slow pacing, calming and peaceful tone"
+    },
+    {
+      "name": "James",
+      "age": 42,
+      "gender": "Male",
+      "desc": "Trustworthy documentary narrator, 105-125 Hz, deep and authoritative",
+      "model": "design",
+      "instruct": "Male, 42 years old, deep warm baritone voice, rich resonance, measured pacing, trustworthy and knowledgeable tone"
+    },
+    {
+      "name": "Ethan",
+      "age": 27,
+      "gender": "Male",
+      "desc": "Friendly conversational assistant, 115-140 Hz, approachable and warm",
+      "model": "design",
+      "instruct": "Male, 27 years old, warm friendly voice, approachable and natural, conversational pacing, helpful and engaged tone"
+    },
+    {
+      "name": "Michael",
+      "age": 54,
+      "gender": "Male",
+      "desc": "Corporate authority voice, 95-115 Hz, commanding for executive communications",
+      "model": "design",
+      "instruct": "Male, 54 years old, deep commanding voice, powerful executive presence, deliberate pacing, formal authoritative tone"
+    },
+    {
+      "name": "Lucas",
+      "age": 34,
+      "gender": "Male",
+      "desc": "Expressive story voice, 110-135 Hz, dynamic and theatrical for audiobooks",
+      "model": "design",
+      "instruct": "Male, 34 years old, dynamic theatrical voice, full range capability, variable pacing, emotionally expressive tone"
+    },
+    {
+      "name": "David",
+      "age": 48,
+      "gender": "Male",
+      "desc": "Calm educational guide, 105-125 Hz, patient and encouraging for e-learning",
+      "model": "design",
+      "instruct": "Male, 48 years old, calm reassuring voice, patient and supportive, unhurried pacing, encouraging and understanding tone"
+    },
+    {
+      "name": "Noah",
+      "age": 20,
+      "gender": "Male",
+      "desc": "Youthful casual voice, 125-150 Hz, energetic for gaming and social content",
+      "model": "design",
+      "instruct": "Male, 20 years old, casual energetic voice, bright and youthful, fast pacing, relaxed and enthusiastic tone"
+    },
+    {
+      "name": "Henry",
+      "age": 62,
+      "gender": "Male",
+      "desc": "British gentleman narrator, 95-115 Hz, distinguished for heritage content",
+      "model": "design",
+      "instruct": "Male, 62 years old, British RP distinguished voice, deep resonant, measured dignified pacing, cultivated warm gravitas"
+    },
+    {
+      "name": "Thomas",
+      "age": 58,
+      "gender": "Male",
+      "desc": "Serious news & authority voice, 90-110 Hz, commanding for breaking news",
+      "model": "design",
+      "instruct": "Male, 58 years old, very deep authoritative voice, commanding gravitas, measured serious pacing, restrained factual tone"
+    },
+    {
+      "name": "Leo",
+      "age": 38,
+      "gender": "Male",
+      "desc": "Smooth radio & podcast host, 105-130 Hz, charismatic and engaging",
+      "model": "design",
+      "instruct": "Male, 38 years old, warm charismatic voice, smooth radio quality, flowing rhythmic pacing, engaging and personable tone"
+    },
+    {
+      "name": "Angela Merkel",
+      "age": 70,
+      "gender": "Female",
+      "desc": "Measured, precise German accent; calm, analytical speaking style without dramatic emphasis.",
+      "model": "clone",
+      "ref_audio": "voices/merkel.mp3",
+      "ref_text": "Die Coronavirus-Pandemie war und ist eine politische, soziale, ökonomische Jahrhundertaufgabe. Sie ist eine historische Krise, die allen viel und manchen zu viel auferlegt hat. Ich weiß, dass es ungeheures Vertrauen und Geduld von Ihnen verlangt hat und weiter verlangt, sich auf diesen historischen Kraftakt einzulassen. Dafür danke ich Ihnen von ganzem Herzen. Am Ende dieses atemlosen Jahres heißt es auch, einmal innezuhalten und zu trauern. Wir dürfen als Gesellschaft nicht vergessen, wie viele einen geliebten Menschen verloren haben, ohne ihm in den letzten Stunden nah sein zu können."
+    },
+    {
+      "name": "Friedrich Merz",
+      "age": 69,
+      "gender": "Male",
+      "desc": "Clear, articulate delivery; moderate German accent; professional, measured tone befitting leadership.",
+      "model": "clone",
+      "ref_audio": "voices/merz.mp3",
+      "ref_text": "Liebe Mitbürgerinnen und Mitbürger! Heute endet ein Jahr, mit dem jede und jeder von uns eine ganz persönliche Geschichte verbindet. Eine Geschichte von kleinen wie großen Erfolgen, vielleicht auch von Rückschlägen, von Unerwartetem und Neuem und womöglich auch von Verlust und Umbruch. Zum Jahreswechsel ziehen wir nun Bilanz. Jeder von uns ganz persönlich, aber auch wir gemeinsam als Nation. Es geht ein Jahr zu Ende, in dem wir als Land gemeinsam große politische Entscheidungen getroffen haben, beginnend mit der Bundestagswahl am 23. Februar. Sie, die Bürgerinnen und Bürger, haben an diesem Tag über die politische Zukunft unseres Landes entschieden."
+    },
+    {
+      "name": "Olaf Scholz",
+      "age": 66,
+      "gender": "Male",
+      "desc": "Deep voice; deliberate speech cadence; composed demeanor with slight North German accent.",
+      "model": "clone",
+      "ref_audio": "voices/scholz.mp3",
+      "ref_text": "Liebe Mitbürgerinnen und Mitbürger! Vor elf Tagen ist das Böse jäh in unseren Alltag getreten. Ein fröhlicher Vorweihnachtsabend auf dem Weihnachtsmarkt von Magdeburg verwandelte sich in einen unvorstellbaren Albtraum. Fünf Menschen sind auf grausame Weise getötet worden, mehr als zweihundert wurden verletzt, darunter viele sehr schwer. Meine Gedanken sind seither jeden Tag bei denen, die ihre Liebsten verloren haben oder noch immer um sie bangen. Den Verletzten wünsche ich, dass sie schnell wieder ganz gesund werden, an Körper und Seele. Fassungslos stehen wir vor dieser menschenverachtenden Tat. Wie kann ein wahnsinniger Attentäter nur so viel Leid verursachen? Und nicht nur in Magdeburg fragen sich viele: Woher soll die Kraft kommen, um weiterzumachen nach solch einer Katastrophe?"
+    },
+    {
+      "name": "Markus Söder",
+      "age": 58,
+      "gender": "Male",
+      "desc": "Bavarian-inflected German; energetic, dynamic delivery; confident and assertive with regional character.",
+      "model": "clone",
+      "ref_audio": "voices/söder.mp3",
+      "ref_text": "Für uns ist wichtig, dass wir aber in der transatlantischen Gemeinschaft bleiben. Wir spüren, dass das Verhältnis zu den Vereinigten Staaten von Amerika etwas anders ist als früher, aber unser großes Ziel ist, dass aus dieser leichten Beziehungskriese, aus dieser leichten Beziehungsdelle, am Ende wieder ein gutes Verhältnis wird. Anders wird es nicht gehen. Es geht aber nur wenn wir strak sind in Europa, wenn wir eigene Muskeln aufbauen, und wenn wir den Wert auf dieser Gemeinschaft definieren können. Und das wird auf dieser Sicherheitskonferenz diskutiert."
+    },
+    {
+      "name": "Donald Trump",
+      "age": 78,
+      "gender": "Male",
+      "desc": "Distinctive New York accent; rapid, emphatic delivery; repetitive phrasing and superlatives.",
+      "model": "clone",
+      "ref_audio": "voices/trump.mp3",
+      "ref_text": "Thank you very much. It's a privilege to be here at this forum where leaders in business science art diplomacy and world affairs have gathered for many many years to discuss how we can advance prosperity security and peace. I'm here today to represent the interests of the American people and to affirm America's friendship and partnership in building a better world. Like all nations represented at this great forum America hopes for a future in which everyone can prosper. And every child can grow up free from violence poverty and fear. Over the past year we have made extraordinary strides in the US. We are lifting up forgotten communities creating exciting new opportunities and helping every American find their path to the American dream. The dream of a great job a safe home and a better life for their children after years of stagnation. The United States is once again experiencing strong economic growth. The stock market is smashing one record after another and has added more than 7 trillion dollars in new wealth since my election."
+    }
   ]
 }
