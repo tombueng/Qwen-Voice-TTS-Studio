@@ -85,6 +85,13 @@ python -m pip install -U qwen-asr || {
 }
 
 echo
+echo "Installing diffusers (for Stable Audio tab)"
+python -m pip install -U diffusers || {
+  echo
+  echo "WARNING: diffusers install failed. Stable Audio tab will not be available."
+}
+
+echo
 echo "Pinning transformers==4.57.3 (required by qwen-tts)"
 python -m pip install --upgrade --no-deps transformers==4.57.3 || {
   echo

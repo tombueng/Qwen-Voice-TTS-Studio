@@ -16,6 +16,9 @@ class ModelManager:
         self.design_model = None
         self.asr_model = None
         self.asr_model_id = None
+        self.stableaudio_model = None
+        self.stableaudio_sample_rate = None
+        self.stableaudio_sample_size = None
     
     def _get_attn_implementation(self) -> str:
         """Get appropriate attention implementation."""
@@ -123,6 +126,43 @@ class ModelManager:
             return "✗ qwen-asr is not installed. Please run setup again or install it in the venv: pip install -U qwen-asr"
         except Exception as e:
             return f"✗ Error loading ASR model: {str(e)}"
+
+    def load_stableaudio_model(self):
+        """Load Stable Audio model via diffusers StableAudioPipeline."""
+        if self.stableaudio_model is not None:
+            return "✓ Stable Audio model already loaded"
+
+        # flash_attn_2_cuda is a compiled CUDA extension; on CPU it raises
+        # OSError ("DLL load failed") which diffusers does not catch (only
+        # ImportError is caught).  Pre-stub it so the import chain succeeds.
+        import sys, types  # noqa: E401
+        if "flash_attn_2_cuda" not in sys.modules:
+            try:
+                import flash_attn_2_cuda  # noqa: F401
+            except Exception:
+                sys.modules["flash_attn_2_cuda"] = types.ModuleType("flash_attn_2_cuda")
+
+        # Scope the ImportError check tightly so that any ImportError raised
+        # by lazy imports inside from_pretrained is reported verbatim.
+        try:
+            from diffusers import StableAudioPipeline
+        except ImportError:
+            return "✗ diffusers is not installed. Run: pip install diffusers"
+
+        try:
+            local_model_path = self.models_dir / "stable-audio-open-1.0"
+            model_id = str(local_model_path) if local_model_path.exists() else "stabilityai/stable-audio-open-1.0"
+
+            pipe_dtype = torch.float16 if self.device.startswith("cuda") else torch.float32
+            pipe = StableAudioPipeline.from_pretrained(model_id, torch_dtype=pipe_dtype)
+            pipe = pipe.to(self.device)
+
+            self.stableaudio_model = pipe
+            self.stableaudio_sample_rate = pipe.vae.sampling_rate
+            self.stableaudio_sample_size = None  # not used with diffusers
+            return "✓ Stable Audio model loaded successfully"
+        except Exception as e:
+            return f"✗ Error loading Stable Audio model: {str(e)}"
     
     def get_supported_speakers(self) -> list | None:
         """Return supported speaker names from the loaded CustomVoice model, or None if not yet loaded."""
@@ -143,3 +183,6 @@ class ModelManager:
         self.design_model = None
         self.asr_model = None
         self.asr_model_id = None
+        self.stableaudio_model = None
+        self.stableaudio_sample_rate = None
+        self.stableaudio_sample_size = None

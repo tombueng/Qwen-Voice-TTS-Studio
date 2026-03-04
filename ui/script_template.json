@@ -1,0 +1,119 @@
+{
+  "pause_between_lines":  0.8,
+  "pause_between_scenes": 2.5,
+
+  "speaker": [
+    {
+      "name": "Narrator",
+      "ref_name": "Emma"
+    },
+    {
+      "_note": "Jake — cynical press-pool reporter, rendered with Aiden's voice",
+      "name": "Jake",
+      "ref_name": "Aiden"
+    },
+    {
+      "ref_name": "Donald Trump"
+    }
+  ],
+
+  "scenes": [
+    {
+      "title": "The Grand Arrival",
+      "dialog": [
+          {
+            "speaker": "Narrator",
+            "connotation": "dry, deadpan",
+            "text": "It was the most tremendous press conference the world had ever seen. At least — that is what the press release said. It used the word tremendous eleven times. Two of them were in the subtitle."
+          },
+        {
+          "speaker": "Narrator",
+          "connotation": "dry, building",
+          "text": "The motorcade arrived. The lobby doors swung open. The elevator obliged. Donald J. Trump had entered the building."
+        },
+        {
+          "speaker": "Donald Trump",
+          "connotation": "proud, genuinely amazed by elevator",
+          "text": "Great elevator. Possibly the best elevator I have ever ridden in my entire life. People are going to be talking about this elevator. Now — the plan. The greatest plan ever assembled. In a folder."
+        },
+        {
+          "speaker": "Jake",
+          "connotation": "flat, utterly deadpan",
+          "speed": 0.95,
+          "pause_after": 0.6,
+          "text": "Is that a zip file. Printed out. On paper."
+        }
+      ]
+    },
+
+    {
+      "title": "Live Before the Nation",
+      "dialog": [
+        {
+          "speaker": "Narrator",
+          "connotation": "theatrical, dry",
+          "text": "The ballroom was packed. Cameras from thirty networks. And, for reasons nobody investigated, a cat."
+        },
+        {
+          "speaker": "Donald Trump",
+          "connotation": "triumphant, grand, arms spread wide",
+          "text": "Ladies and gentlemen — I have solved everything. Every problem. All of them. Done. You are welcome, America."
+        },
+        {
+          "speaker": "Donald Trump",
+          "connotation": "leaning into microphone, solemn, presidential",
+          "text": "Now — the highlights of the plan. Point one — what — was there a — did I just step on —"
+        },
+        {
+          "speaker": "Narrator",
+          "connotation": "matter-of-fact, completely dry",
+          "text": "He had stepped on the cat. The cat expressed its position. Diplomatically, but clearly."
+        },
+        {
+          "speaker": "Donald Trump",
+          "connotation": "recovering quickly, waving it off",
+          "text": "Great cat. Beautiful animal. Love cats. Now — point two of the plan — That was the podium. Incredible craftsmanship. Very loose bolts. Fake news if anyone says differently."
+        },
+        {
+          "speaker": "Narrator",
+          "connotation": "dry, resigned, slightly awed",
+          "text": "Someone in the hall began to laugh. The crowd sighed with collective disappointment. And somewhere in the back — slowly, politely — people began to clap."
+        }
+      ]
+    },
+
+    {
+      "title": "The Long Night",
+      "dialog": [
+        {
+          "speaker": "Narrator",
+          "connotation": "quiet, dry, tired",
+          "text": "Outside, the sky had made its own statement. Thunder rolled across the city. The weather, for once, was on the record."
+        },
+        {
+          "speaker": "Jake",
+          "connotation": "completely exhausted, flat",
+          "speed": 0.95,
+          "text": "Any final comment for the cameras, Mister President?"
+        },
+        {
+          "speaker": "Donald Trump",
+          "connotation": "serene, utterly unshakeable",
+          "text": "Perfect. Absolutely perfect event. The cat was unplanned — adds warmth. The podium situation — very technical, people wouldn't understand. People are calling me right now, Jake. They're saying: Don, that was the greatest press conference we have ever witnessed in our entire lives."
+        },
+        {
+          "speaker": "Jake",
+          "connotation": "flat, hollowed out",
+          "speed": 0.95,
+          "pause_after": 0.8,
+          "text": "Who. Who specifically is calling you."
+        },
+        {
+          "speaker": "Narrator",
+          "connotation": "dry, warm, gently closing",
+          "text": "The bell tolled. The cameras went dark. Somewhere in the hotel, the cat was still somewhere. And someone, already, was writing the next press release. It would use the word tremendous fourteen times. Three of them in the title."
+        }
+      ]
+    }
+  ]
+}

@@ -142,6 +142,13 @@ if errorlevel 1 (
 )
 echo.
 
+echo Installing diffusers (for Stable Audio tab)
+"%VENV_PATH%\Scripts\python.exe" -m pip install -U diffusers
+if errorlevel 1 (
+    echo WARNING: diffusers install failed. Stable Audio tab will not be available.
+)
+echo.
+
 echo Pinning transformers==4.57.3 (required by qwen-tts)
 "%VENV_PATH%\Scripts\python.exe" -m pip install --upgrade --no-deps transformers==4.57.3
 if errorlevel 1 (

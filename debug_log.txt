@@ -1,0 +1,77 @@
+25 files
+  [1/25] applause2.mp3
+    read ok: (385489, 2) sr=24000
+    done
+  [2/25] birds.ogg
+    read ok: (636253, 2) sr=44100
+    done
+  [3/25] boat_horn.mp3
+    read ok: (56448, 2) sr=44100
+    done
+  [4/25] car_honk.mp3
+    read ok: (33807, 2) sr=44100
+    done
+  [5/25] cat_meow.mp3
+    read ok: (58752, 2) sr=48000
+    done
+  [6/25] church_bell.ogg
+    read ok: (123754,) sr=44100
+    done
+  [7/25] crickets.ogg
+    read ok: (2678400, 2) sr=48000
+    done
+  [8/25] crowd_cheer.mp3
+    read ok: (213120, 2) sr=48000
+    done
+  [9/25] crowd_shock.mp3
+    read ok: (125568, 2) sr=48000
+    done
+  [10/25] crowd_sigh.mp3
+    read ok: (149760, 2) sr=48000
+    done
+  [11/25] door_open.mp3
+    read ok: (97920, 2) sr=48000
+    done
+  [12/25] elevator_ding.mp3
+    read ok: (105984,) sr=44100
+    done
+  [13/25] fart.mp3
+    read ok: (32256, 2) sr=48000
+    done
+  [14/25] forest.mp3
+    read ok: (9392256, 2) sr=44100
+    done
+  [15/25] forest_ambient.ogg
+    read ok: (1455300, 2) sr=44100
+    done
+  [16/25] forest_birds.mp3
+    read ok: (5307264,) sr=48000
+    done
+  [17/25] hotel_crowd.mp3
+    read ok: (1406592, 2) sr=24000
+    done
+  [18/25] rain.ogg
+    read ok: (455616,) sr=44100
+    done
+  [19/25] rain_heavy.ogg
+    read ok: (991680,) sr=44100
+    done
+  [20/25] rain_light.ogg
+    read ok: (2657280, 2) sr=44100
+    done
+  [21/25] river.ogg
+    read ok: (1601761, 2) sr=48000
+    done
+  [22/25] street.mp3
+    read ok: (2717568, 2) sr=48000
+    done
+  [23/25] thunderstorm.ogg
+    read ok: (1322496,) sr=44100
+    done
+  [24/25] witch_laugh.mp3
+    read ok: (52992, 2) sr=48000
+    done
+  [25/25] zip.mp3
+    read ok: (48384, 2) sr=44100
+    done
+ALL DONE

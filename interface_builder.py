@@ -3,13 +3,37 @@ from pathlib import Path
 from typing import Optional, Callable
 import gradio as gr
 
+_UI_DIR = Path(__file__).parent / "ui"
+
+
+def _load_ui_file(filename: str, fallback: str = "") -> str:
+    """Read a file from the ui/ directory next to this module.
+
+    Returns *fallback* (and prints a warning) if the file is missing.
+    """
+    path = _UI_DIR / filename
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        print(f"[InterfaceBuilder] WARNING: ui/{filename} not found — using fallback", flush=True)
+        return fallback
+
 
 class InterfaceBuilder:
     """Builds the Gradio UI interface."""
-    
+
     def __init__(self, title: str = "Qwen Voice TTS Studio"):
         self.title = title
-        self.demo = None
+        self.demo  = None
+        # Load external UI assets once at startup
+        self._script_template = _load_ui_file(
+            "script_template.json",
+            fallback='{\n  "speaker": [],\n  "scenes": []\n}',
+        )
+        self._script_help = _load_ui_file(
+            "script_help.md",
+            fallback="*(script_help.md not found — see ui/ directory)*",
+        )
     
     def create_interface(self,
                         on_tts_generate: Callable,
@@ -19,6 +43,11 @@ class InterfaceBuilder:
                         on_transcribe: Callable,
                         on_save_clone: Callable,
                         on_save_design: Callable,
+                        on_voice_speed_change: Optional[Callable] = None,
+                        on_stable_audio_generate: Optional[Callable] = None,
+                        on_save_hf_token: Optional[Callable] = None,
+                        on_abort: Optional[Callable] = None,
+                        hf_token: str = "",
                         speakers_list: Optional[list] = None,
                         user_voice_choices: Optional[list] = None) -> gr.Blocks:
         """Create the main Gradio interface.
@@ -27,12 +56,22 @@ class InterfaceBuilder:
         user_voice_choices: list of (label, value) tuples for user-saved voices
         """
         with gr.Blocks(title=self.title) as demo:
-            gr.Markdown(f"# 🎙️ {self.title}")
+            with gr.Row():
+                gr.Markdown(f"# 🎙️ {self.title}")
+                abort_btn = gr.Button(
+                    "⏹ Abort",
+                    variant="stop",
+                    scale=0,
+                    min_width=110,
+                    elem_id="global-abort-btn",
+                )
+            abort_btn.click(on_abort or (lambda: None), inputs=[], outputs=[])
 
             with gr.Tabs():
                 with gr.Tab("🎤 TTS"):
                     self._create_tts_tab(on_tts_generate, speakers_list or [],
-                                         user_voice_choices or [])
+                                         user_voice_choices or [],
+                                         on_voice_speed_change=on_voice_speed_change)
 
                 with gr.Tab("🎯 Clone"):
                     self._create_cloning_tab(on_clone_voice, on_save_clone)
@@ -46,8 +85,12 @@ class InterfaceBuilder:
                 with gr.Tab("📝 ASR"):
                     self._create_asr_tab(on_transcribe)
 
+                with gr.Tab("🔊 Stable Audio"):
+                    self._create_stable_audio_tab(on_stable_audio_generate)
+
                 with gr.Tab("⚙️ Settings"):
-                    self._create_settings_tab()
+                    self._create_settings_tab(on_save_hf_token=on_save_hf_token,
+                                              hf_token=hf_token)
 
                 with gr.Tab("ℹ️ Info"):
                     self._create_info_tab()
@@ -92,7 +135,8 @@ class InterfaceBuilder:
         return f"{name}   {meta}"
 
     def _create_tts_tab(self, callback: Callable, voices_data: list,
-                        user_voice_choices: list = []):
+                        user_voice_choices: list = [],
+                        on_voice_speed_change: Optional[Callable] = None):
         """Create Text-to-Speech tab.
 
         voices_data: ordered list of voice dicts from main_voices.json.
@@ -121,6 +165,18 @@ class InterfaceBuilder:
             label="👤 Voice",
         )
 
+        speed = gr.Slider(
+            minimum=0.5, maximum=2.0, step=0.05, value=1.0,
+            label="⚡ Speed  (1.0 = normal · 0.8 = 20% slower · 1.2 = 20% faster)",
+        )
+
+        if on_voice_speed_change:
+            selected_voice.change(
+                on_voice_speed_change,
+                inputs=[selected_voice],
+                outputs=[speed],
+            )
+
         text_input = gr.TextArea(
             label="📝 Text Input",
             value="Hello, I'm Qwen text to speech AI model.",
@@ -129,11 +185,12 @@ class InterfaceBuilder:
 
         generate_btn = gr.Button("🎵 Generate Speech", variant="primary")
         audio_output = gr.Audio(label="🔊 Generated Audio")
-        status_out   = gr.Textbox(label="📋 Status", interactive=False)
+        status_out   = gr.Textbox(label="📋 Log", interactive=False,
+                                   lines=10, max_lines=200)
 
         generate_btn.click(
             callback,
-            inputs=[text_input, language, selected_voice],
+            inputs=[text_input, language, selected_voice, speed],
             outputs=[audio_output, status_out],
         )
     
@@ -151,22 +208,29 @@ class InterfaceBuilder:
 
         target_text  = gr.Textbox(label="📝 Text to Synthesise", lines=3,
                                    value="Hello, I'm Qwen text to speech AI model.")
+        speed        = gr.Slider(
+            minimum=0.5, maximum=2.0, step=0.05, value=1.0,
+            label="⚡ Speed  (1.0 = normal · 0.8 = 20% slower · 1.2 = 20% faster)",
+        )
         clone_btn    = gr.Button("✨ Clone Voice", variant="primary")
         audio_output = gr.Audio(label="🔊 Output")
-        status       = gr.Textbox(label="📋 Status", interactive=False)
+        status       = gr.Textbox(label="📋 Log", interactive=False,
+                                   lines=10, max_lines=200)
 
-        clone_btn.click(callback, inputs=[ref_audio, ref_text, target_text], outputs=[audio_output, status])
+        clone_btn.click(callback, inputs=[ref_audio, ref_text, target_text, speed],
+                        outputs=[audio_output, status])
 
         with gr.Accordion("💾 Save this voice to My Voices", open=False):
             with gr.Row():
                 save_name = gr.Textbox(label="Voice Name", placeholder="e.g. My Clone")
                 save_desc = gr.Textbox(label="Description (optional)",
                                        placeholder="Brief description of the voice")
+            gr.Markdown("*The current Speed value above will be stored as this voice's default.*")
             save_btn    = gr.Button("💾 Save")
             save_status = gr.Textbox(label="", interactive=False, show_label=False)
             save_btn.click(
                 on_save,
-                inputs=[save_name, save_desc, ref_audio, ref_text],
+                inputs=[save_name, save_desc, ref_audio, ref_text, speed],
                 outputs=[save_status],
             )
     
@@ -188,67 +252,36 @@ class InterfaceBuilder:
             placeholder="Enter the text you want to speak with the designed voice...",
             value="Hello, I'm Qwen text to speech AI model.",
         )
+        speed = gr.Slider(
+            minimum=0.5, maximum=2.0, step=0.05, value=1.0,
+            label="⚡ Speed  (1.0 = normal · 0.8 = 20% slower · 1.2 = 20% faster)",
+        )
         design_btn   = gr.Button("✨ Design & Generate", variant="primary")
         audio_output = gr.Audio(label="🔊 Generated Audio")
-        status_out   = gr.Textbox(label="📋 Status", interactive=False)
+        status_out   = gr.Textbox(label="📋 Log", interactive=False,
+                                   lines=10, max_lines=200)
 
-        design_btn.click(callback, inputs=[text_input, instructions], outputs=[audio_output, status_out])
+        design_btn.click(callback, inputs=[text_input, instructions, speed],
+                         outputs=[audio_output, status_out])
 
         with gr.Accordion("💾 Save this voice to My Voices", open=False):
             with gr.Row():
                 save_name = gr.Textbox(label="Voice Name", placeholder="e.g. My Designed Voice")
                 save_desc = gr.Textbox(label="Description (optional)",
                                        placeholder="Brief description of the voice")
+            gr.Markdown("*The current Speed value above will be stored as this voice's default.*")
             save_btn    = gr.Button("💾 Save")
             save_status = gr.Textbox(label="", interactive=False, show_label=False)
             save_btn.click(
                 on_save,
-                inputs=[save_name, save_desc, instructions],
+                inputs=[save_name, save_desc, instructions, speed],
                 outputs=[save_status],
             )
-    
-    # ── Script tab template ───────────────────────────────────────────────────
-
-    _SCRIPT_TEMPLATE = """{
-  "speakers": [
-    {
-      "name": "Donald Trump",
-      "ref_audio": "trump.mp3",
-      "ref_text": "Thank you very much. It's a privilege to be here at this forum where leaders in business science art diplomacy and world affairs have gathered for many many years to discuss how we can advance prosperity security and peace. I'm here today to represent the interests of the American people and to affirm America's friendship and partnership in building a better world. Like all nations represented at this great forum America hopes for a future in which everyone can prosper. And every child can grow up free from violence poverty and fear. Over the past year we have made extraordinary strides in the US. We are lifting up forgotten communities creating exciting new opportunities and helping every American find their path to the American dream. The dream of a great job a safe home and a better life for their children after years of stagnation. The United States is once again experiencing strong economic growth. The stock market is smashing one record after another and has added more than 7 trillion dollars in new wealth since my election."
-    },
-    {
-      "name": "Narrator",
-      "ref_speaker": "aiden"
-    },
-    {
-      "name": "Character",
-      "ref_description": "Female, 30 years old, warm and friendly voice, calm measured pacing"
-    }
-  ],
-  "scenes": [
-    {
-      "pos": 1,
-      "title": "A Short Greeting",
-      "dialog": [
-        {"pos": 1, "speaker": "Narrator",      "text": "The story begins on a quiet morning.",        "conotation": "calm, measured"},
-        {"pos": 2, "speaker": "Donald Trump",  "text": "Good morning! It is wonderful to see you.",   "conotation": "warm, friendly"},
-        {"pos": 3, "speaker": "Character",     "text": "Likewise. Shall we get started?",             "conotation": "gentle, focused"}
-      ]
-    }
-  ]
-}"""
-
     def _create_script_tab(self, callback: Callable):
         """Create the unified multi-speaker Script tab."""
         gr.Markdown("## 📜 Script")
-        gr.Markdown(
-            "Write a multi-speaker script in JSON. "
-            "Each speaker can be defined by **reference audio** (voice clone — file must be in the `voices/` folder, "
-            "just use the filename e.g. `alice.mp3`), "
-            "a **built-in speaker ID** (`ref_speaker`), "
-            "or a **text description** (`ref_description`). "
-            "All dialog lines are rendered and merged into a single WAV output."
-        )
+        with gr.Accordion("📖 Reference — speakers, directions, inline audio markers", open=False):
+            gr.Markdown(self._script_help)
 
         with gr.Row():
             json_file   = gr.File(label="📁 Upload Script JSON", file_types=[".json"])
@@ -262,13 +295,22 @@ class InterfaceBuilder:
             language="json",
             lines=25,
             interactive=True,
-            value=self._SCRIPT_TEMPLATE,
+            value=self._script_template,
         )
 
         json_preview = gr.JSON(label="👁️ Parsed Preview")
 
-        run_btn      = gr.Button("▶ Run Script", variant="primary")
-        status_out   = gr.Textbox(label="📋 Status", interactive=False, lines=3)
+        with gr.Row():
+            run_btn       = gr.Button("▶ Run Script", variant="primary", scale=3)
+            shutdown_chk  = gr.Checkbox(
+                label="⏻  Shutdown machine when done",
+                value=False,
+                scale=1,
+                info="Schedules OS shutdown ~60 s after the job finishes. Cancel: shutdown /a (Win) · shutdown -c (Linux)",
+            )
+
+        status_out   = gr.Textbox(label="📋 Log", interactive=False,
+                                   lines=20, max_lines=400)
         audio_output = gr.Audio(label="🔊 Merged Output")
 
         # ── helpers ──────────────────────────────────────────────────────────
@@ -289,7 +331,7 @@ class InterfaceBuilder:
         load_btn.click(_load_from_file, inputs=[json_file], outputs=[json_editor, json_preview])
 
         template_btn.click(
-            lambda: (self._SCRIPT_TEMPLATE, self._parse_json_for_preview(self._SCRIPT_TEMPLATE)),
+            lambda: (self._script_template, self._parse_json_for_preview(self._script_template)),
             outputs=[json_editor, json_preview],
         )
 
@@ -304,7 +346,7 @@ class InterfaceBuilder:
             outputs=[json_preview],
         )
 
-        run_btn.click(callback, inputs=[json_editor], outputs=[audio_output, status_out])
+        run_btn.click(callback, inputs=[json_editor, shutdown_chk], outputs=[audio_output, status_out])
 
     def _create_asr_tab(self, callback: Callable):
         """Create Speech Recognition tab."""
@@ -326,30 +368,83 @@ class InterfaceBuilder:
             outputs=[text_output]
         )
     
-    def _create_settings_tab(self):
+    def _create_stable_audio_tab(self, callback: Optional[Callable]):
+        """Create the Stable Audio sound-effects generation tab."""
+        gr.Markdown("## 🔊 Stable Audio — Sound Effects & Music")
+        gr.Markdown(
+            "Generate sound effects, ambience, or music from a text description using "
+            "**Stable Audio Open 1.0** (stabilityai/stable-audio-open-1.0). "
+            "The model (~3 GB) is downloaded from HuggingFace on first use."
+        )
+
+        prompt = gr.Textbox(
+            label="🎵 Prompt",
+            placeholder=(
+                "e.g. Heavy rain on a metal roof, distant rolling thunder, wind howling through trees"
+            ),
+            lines=3,
+        )
+
+        with gr.Row():
+            duration = gr.Slider(
+                minimum=1.0, maximum=30.0, step=0.5, value=10.0,
+                label="⏱️ Duration (seconds)",
+            )
+            steps = gr.Slider(
+                minimum=20, maximum=150, step=10, value=100,
+                label="🔁 Steps  (more = higher quality, slower)",
+            )
+            cfg_scale = gr.Slider(
+                minimum=1.0, maximum=15.0, step=0.5, value=7.0,
+                label="🎯 CFG Scale  (higher = follows prompt more strictly)",
+            )
+
+        generate_btn = gr.Button("🔊 Generate Sound", variant="primary")
+        audio_output = gr.Audio(label="🎵 Generated Audio")
+        status_out   = gr.Textbox(label="📋 Log", interactive=False,
+                                   lines=10, max_lines=200)
+
+        if callback:
+            generate_btn.click(
+                callback,
+                inputs=[prompt, duration, steps, cfg_scale],
+                outputs=[audio_output, status_out],
+            )
+        else:
+            generate_btn.click(
+                lambda *_: (None, "✗ Stable Audio callback not wired"),
+                inputs=[prompt, duration, steps, cfg_scale],
+                outputs=[audio_output, status_out],
+            )
+
+    def _create_settings_tab(self, on_save_hf_token: Optional[Callable] = None,
+                             hf_token: str = ""):
         """Create Settings tab."""
         gr.Markdown("## ⚙️ Settings")
-        
-        device = gr.Dropdown(
-            choices=["cuda", "cpu"],
-            value="cuda",
-            label="💻 Compute Device"
-        )
-        
-        model_dtype = gr.Dropdown(
-            choices=["bfloat16", "float32"],
-            value="bfloat16",
-            label="🔢 Model Dtype"
-        )
-        
-        save_btn = gr.Button("💾 Save Settings")
-        status = gr.Textbox(label="📋 Status")
-        
-        save_btn.click(
-            lambda d, dt: "Settings saved ✓",
-            inputs=[device, model_dtype],
-            outputs=[status]
-        )
+
+        with gr.Accordion("🔑 HuggingFace Token", open=not hf_token):
+            gr.Markdown(
+                "Some models (e.g. **Stable Audio Open 1.0**) are gated and require you to "
+                "accept their license on HuggingFace and provide an access token.  \n"
+                "Get your token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) "
+                "(read access is sufficient).  \n"
+                "The token is saved locally in `config.json` and applied on every startup."
+            )
+            token_input = gr.Textbox(
+                value=hf_token,
+                label="Access Token",
+                placeholder="hf_...",
+                type="password",
+            )
+            save_token_btn = gr.Button("💾 Save Token", variant="primary")
+            token_status   = gr.Textbox(label="", interactive=False, show_label=False)
+
+            if on_save_hf_token:
+                save_token_btn.click(on_save_hf_token, inputs=[token_input],
+                                     outputs=[token_status])
+            else:
+                save_token_btn.click(lambda _: "✗ Callback not wired",
+                                     inputs=[token_input], outputs=[token_status])
     
     def _create_info_tab(self):
         """Create Information tab."""

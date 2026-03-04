@@ -21,6 +21,7 @@ MODELS = {
     "base":   "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
     "design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
     "asr":    "Qwen/Qwen3-ASR-1.7B",
+    "stableaudio":  "stabilityai/stable-audio-open-1.0"
 }
 
 

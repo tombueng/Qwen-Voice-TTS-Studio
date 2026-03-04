@@ -3,9 +3,54 @@
 Uses print(flush=True) instead of Python's logging module because Gradio and
 transformers routinely reconfigure the root logger and redirect stderr, which
 swallows normal logging output.  print() to stdout is always visible.
+
+UI capture
+----------
+Call ui_capture_start() from a worker thread to begin buffering log lines as
+plain text.  The Gradio thread calls ui_capture_drain(tid) to read them and
+ui_capture_stop(tid) when done.
 """
 
 import ctypes as _ctypes
+import re as _re
+import threading as _threading
+
+_ANSI_RE = _re.compile(r"\033\[[0-9;]*[A-Za-z]")
+
+# ── UI capture (thread-keyed) ──────────────────────────────────────────────────
+_ui_capture: dict = {}
+_ui_capture_lock  = _threading.Lock()
+
+
+def _ui_push(line: str) -> None:
+    """Append *line* to the current thread's capture buffer (no-op if not capturing)."""
+    buf = _ui_capture.get(_threading.get_ident())
+    if buf is not None:
+        buf.append(_ANSI_RE.sub("", line))
+
+
+def ui_capture_start() -> int:
+    """Register the current thread for UI capture.  Returns thread-id."""
+    tid = _threading.get_ident()
+    with _ui_capture_lock:
+        _ui_capture[tid] = []
+    return tid
+
+
+def ui_capture_drain(tid: int) -> list:
+    """Atomically return and clear all captured lines for *tid*."""
+    with _ui_capture_lock:
+        buf = _ui_capture.get(tid)
+        if buf is None:
+            return []
+        lines, _ui_capture[tid] = list(buf), []
+    return lines
+
+
+def ui_capture_stop(tid: int) -> None:
+    """Remove the capture buffer for *tid*."""
+    with _ui_capture_lock:
+        _ui_capture.pop(tid, None)
 
 # Enable ANSI/VT100 colour codes on Windows 10+
 # (ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
@@ -52,6 +97,8 @@ class _Log:
         lvl_str = f"{label_colour}{label}\033[0m"
         msg_str = f"{msg_colour}{msg}\033[0m"
         print(f"{ts_str}  {icon}  {lvl_str}  {msg_str}", flush=True)
+        # Plain-text copy to UI capture buffer (no ANSI codes)
+        _ui_push(f"{ts}  {icon}  {label.strip():<5}  {msg}")
 
     def debug(self, msg):   self._emit("DBG",  str(msg))
     def info(self, msg):    self._emit("INFO", str(msg))
@@ -72,7 +119,9 @@ _SECTION_ICONS = {
     "Clone Voice (JSON)":   "🧬",
     "Design Voice":         "🎨",
     "Design Voice (JSON)":  "🎨",
+    "Run Script":           "📜",
     "Transcribe":           "📝",
+    "Stable Audio":         "🔊",
     "System Configuration": "⚙️",
     "Dependency Check":     "📦",
     "Pre-loading Models":   "🤖",
@@ -89,6 +138,14 @@ def section(title: str, width: int = 62):
     print(f"\033[1;96m╭{'─' * (width)}\033[0m", flush=True)
     print(f"\033[1;96m│\033[0m\033[1;97m{header}\033[2;37m{bar}\033[0m", flush=True)
     print(f"\033[1;96m╰{'─' * (width)}\033[0m", flush=True)
+    _ui_push("")
+    _ui_push(f"── {icon}  {title}  " + "─" * max(0, 44 - len(title)))
+
+
+def subsection(title: str):
+    """Print a lightweight scene/step sub-header within a section."""
+    print(f"\033[0;36m  ->  {title}\033[0m", flush=True)
+    _ui_push(f"   ->  {title}")
 
 
 def section_end(label: str = ""):
@@ -104,3 +161,11 @@ def section_end(label: str = ""):
         icon   = "·"
     suffix = f"  {icon}  {colour}{label}\033[0m" if label else ""
     print(f"\033[1;96m{'─' * 20}\033[0m{suffix}", flush=True)
+    if label in ("done", "ok"):
+        _ui_push(f"── ✅ {label}")
+    elif label in ("error", "failed", "FAILED"):
+        _ui_push(f"── ❌ {label}")
+    elif label:
+        _ui_push(f"── {label}")
+    else:
+        _ui_push("──────────────────")

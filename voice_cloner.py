@@ -188,6 +188,76 @@ class VoiceCloner:
         except Exception:
             return None
 
+    # ── Pre-built prompt support ──────────────────────────────────────────────
+
+    def is_speech_cached(self, text: str, ref_audio: str, ref_text: str) -> bool:
+        """Return True if the TTS output for these params is already in the cache."""
+        resolved = self._resolve_ref_text(ref_text)
+        return self._gen_cache.get(
+            text, str(Path(ref_audio).resolve()), resolved or ""
+        ) is not None
+
+    def build_voice_clone_prompt(self, ref_audio: str, ref_text: str) -> list:
+        """Encode a reference audio once into a reusable VoiceClonePromptItem list.
+
+        Call this once per speaker before a multi-line script to avoid
+        re-encoding the same reference audio on every line.
+        """
+        resolved_ref_text = self._resolve_ref_text(ref_text)
+
+        load_result = self.model_manager.load_base_model()
+        if "Error" in load_result:
+            raise RuntimeError(load_result)
+
+        model = self.model_manager.base_model
+        if model is None:
+            raise RuntimeError("Base model is None after loading")
+
+        return model.create_voice_clone_prompt(
+            ref_audio=ref_audio,
+            ref_text=resolved_ref_text if resolved_ref_text else None,
+            x_vector_only_mode=not bool(resolved_ref_text),
+        )
+
+    def generate_with_voice_clone_prompt(self, text: str, prompt_items: list,
+                                          ref_audio: str, ref_text: str,
+                                          voice_name: Optional[str] = None) -> Optional[Path]:
+        """Generate speech using a pre-built VoiceClonePromptItem list.
+
+        Uses the same cache key as generate_with_cloned_voice so results are shared.
+        Skips re-encoding the reference audio — prompt_items are passed directly.
+        """
+        ref_audio_path = Path(ref_audio)
+        resolved_ref_text = self._resolve_ref_text(ref_text)
+
+        cached = self._gen_cache.get(text, str(ref_audio_path.resolve()), resolved_ref_text or "")
+        if cached:
+            return cached
+
+        meta = {
+            "type":       "clone",
+            "text":       text,
+            "voice_name": voice_name or "",
+            "ref_audio":  ref_audio,
+            "ref_text":   resolved_ref_text or "",
+            "model":      "Qwen3-TTS-12Hz-1.7B-Base",
+        }
+        output_file = self._gen_cache.path(
+            text, str(ref_audio_path.resolve()), resolved_ref_text or "", meta=meta
+        )
+
+        model = self.model_manager.base_model
+        if model is None:
+            raise RuntimeError("Base model is None — call build_voice_clone_prompt first")
+
+        wavs, sr = model.generate_voice_clone(
+            text=text,
+            language=None,
+            voice_clone_prompt=prompt_items,
+        )
+        sf.write(str(output_file), wavs[0], sr)
+        return self._gen_cache.put(output_file, meta=meta)
+
     # ── Generate with saved voice ─────────────────────────────────────────────
 
     def generate_with_cloned_voice(self, text: str, cloned_voice_config: Dict,

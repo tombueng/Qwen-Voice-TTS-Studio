@@ -1,0 +1,214 @@
+{
+  "_comment": "Master feature test — covers every supported option in the Script runner",
+
+  "pause_between_lines":  0.8,
+  "pause_between_scenes": 1.5,
+
+  "speaker": [
+
+    {
+      "_comment": "Mode 1a — ref_name without a separate 'name'; ref_name doubles as dialog identity",
+      "ref_name": "Aiden"
+    },
+
+    {
+      "_comment": "Mode 1b — ref_name with an explicit 'name' alias",
+      "name": "Host",
+      "ref_name": "Aiden"
+    },
+
+    {
+      "_comment": "Mode 2 — built-in CustomVoice speaker ID",
+      "name": "Narrator",
+      "ref_speaker": "serena"
+    },
+
+    {
+      "_comment": "Mode 3 — voice clone from reference audio in voices/",
+      "name": "Donald Trump",
+      "ref_audio": "trump.mp3",
+      "ref_text": "Thank you very much. It's a privilege to be here at this forum where leaders in business science art diplomacy and world affairs have gathered for many many years to discuss how we can advance prosperity security and peace."
+    },
+
+    {
+      "_comment": "Mode 4a — voice design via ref_description",
+      "name": "Character",
+      "ref_description": "Female, 34 years old, warm and slightly husky, slow measured pacing, emotionally warm"
+    },
+
+    {
+      "_comment": "Mode 4b — voice design via 'voice' (alias for ref_description)",
+      "name": "Wizard",
+      "voice": "Male, elderly, deep resonant voice, slow deliberate pacing, wise and mysterious"
+    }
+
+  ],
+
+  "scenes": [
+
+    {
+      "title": "Scene 1 — Speaker types + scene-level direction + connotation",
+      "pause_after": 2.0,
+
+      "direction": [
+        {
+          "_comment": "Direction with all params",
+          "type":        "ambience",
+          "instruction": "quiet indoor conference room, faint air conditioning hum, subtle room tone",
+          "volume":      0.15,
+          "steps":       20,
+          "cfg_scale":   7.0
+        },
+        {
+          "_comment": "Direction with only required fields (defaults used for volume/steps/cfg_scale)",
+          "type":        "music",
+          "instruction": "very soft warm orchestral underscore, barely audible, slow and neutral"
+        }
+      ],
+
+      "dialog": [
+        {
+          "speaker": "Narrator",
+          "connotation": "calm, measured",
+          "text": "Welcome to the feature test. Every capability of the script engine will be demonstrated."
+        },
+        {
+          "speaker": "Host",
+          "connotation": "friendly, professional",
+          "speed": 0.95,
+          "text": "Good morning. Today we test voice cloning, voice design, and built-in voices all in one script."
+        },
+        {
+          "speaker": "Donald Trump",
+          "connotation": "confident, enthusiastic",
+          "speed": 1.05,
+          "pause_after": 1.0,
+          "text": "Tremendous. Absolutely tremendous. This is going to be the greatest audio test you have ever heard."
+        },
+        {
+          "speaker": "Character",
+          "connotation": "warm, curious",
+          "text": "I'm looking forward to hearing what the wizard has to say."
+        },
+        {
+          "speaker": "Wizard",
+          "connotation": "slow, mysterious",
+          "speed": 0.85,
+          "text": "Patience, young one. All answers reveal themselves in time."
+        },
+        {
+          "speaker": "Aiden",
+          "text": "And I am Aiden — referenced by ref_name directly, without a separate name field."
+        },
+        {
+          "speaker": "direction",
+          "text": "(This line is skipped — speaker 'direction' is always ignored by the renderer)"
+        }
+      ]
+    },
+
+    {
+      "title": "Scene 2 — Inline sequential effects [audio:...]",
+      "pause_after": 2.0,
+
+      "direction": [
+        {
+          "type":        "ambience",
+          "instruction": "outdoor park on a sunny afternoon, light wind, distant children playing",
+          "volume":      0.2,
+          "steps":       20
+        }
+      ],
+
+      "dialog": [
+        {
+          "speaker": "Narrator",
+          "text": "Scene two tests inline sequential audio effects. Each marker inserts audio at that position and pauses speech around it."
+        },
+        {
+          "speaker": "Host",
+          "text": "A Stable Audio effect with all parameters: [audio:'single loud thunderclap, close and sudden',duration:1.5,pause_before:0.3,pause_after:0.5,volume:0.9,steps:20,cfg_scale:7.0] Did you hear that?"
+        },
+        {
+          "speaker": "Character",
+          "text": "And now a file reference from the audio/ folder: [audio:ref_file:'applause',duration:2.0,pause_after:0.4,volume:0.75] Wonderful applause from a pre-recorded file."
+        },
+        {
+          "speaker": "Host",
+          "text": "Multiple effects in one line: [audio:'short door knock, crisp',duration:0.5,pause_after:0.2] [audio:'door creaking open slowly',duration:1.0,pause_after:0.3] Someone is at the door."
+        },
+        {
+          "speaker": "Wizard",
+          "speed": 0.9,
+          "text": "Effect at the start: [audio:'deep magical chime, resonant',duration:1.5,pause_after:0.5] Now I speak after the chime."
+        },
+        {
+          "speaker": "Donald Trump",
+          "text": "Effect at the end, then silence: The crowd loved it. [audio:'crowd cheering and applauding',duration:2.5,pause_before:0.2,volume:0.85]"
+        }
+      ]
+    },
+
+    {
+      "title": "Scene 3 — Inline background effects [background-audio:...]",
+      "pause_after": 2.0,
+
+      "dialog": [
+        {
+          "speaker": "Narrator",
+          "text": "Scene three tests background audio — mixed under the speech without interrupting the timeline."
+        },
+        {
+          "speaker": "Host",
+          "text": "[background-audio:'peaceful rain falling on leaves, steady and calming',duration:0,volume:0.3,steps:20,cfg_scale:7.0] Speaking with auto-sized rain in the background. Duration zero means the rain matches my speech length exactly."
+        },
+        {
+          "speaker": "Character",
+          "text": "[background-audio:'soft romantic strings, gentle and warm',duration:5.0,volume:0.25,steps:20] This background has an explicit duration of five seconds, regardless of speech length."
+        },
+        {
+          "speaker": "Wizard",
+          "text": "[background-audio:ref_file:'rain',volume:0.2] Background from a pre-recorded file in audio/ — no Stable Audio generation needed."
+        },
+        {
+          "speaker": "Donald Trump",
+          "text": "[background-audio:'crowd murmur, indoor event, moderate energy',duration:0,volume:0.2,steps:20] Background with pause_before — silence first, then mixing starts: [background-audio:'soft applause fading in',duration:0,pause_before:2.0,volume:0.15,steps:20] The second background starts two seconds into the speech."
+        },
+        {
+          "speaker": "Host",
+          "connotation": "upbeat, warm",
+          "text": "[background-audio:ref_file:'birds',volume:0.25] [audio:ref_file:'applause',duration:1.5,pause_before:3.0,volume:0.6] Combining a background file with a sequential effect in the same line."
+        }
+      ]
+    },
+
+    {
+      "title": "Scene 4 — Timing and per-line pause_after",
+
+      "dialog": [
+        {
+          "speaker": "Narrator",
+          "text": "Final scene tests per-line pause_after overrides.",
+          "pause_after": 2.0
+        },
+        {
+          "speaker": "Host",
+          "text": "This line has a short pause of 0.3 seconds after it.",
+          "pause_after": 0.3
+        },
+        {
+          "speaker": "Character",
+          "text": "This line has a long dramatic pause of three seconds after it.",
+          "pause_after": 3.0
+        },
+        {
+          "speaker": "Wizard",
+          "speed": 0.8,
+          "connotation": "slow, final, solemn",
+          "text": "And this is the final line of the test. No special pause — it uses the global pause_between_lines default."
+        }
+      ]
+    }
+
+  ]
+}

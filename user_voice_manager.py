@@ -34,12 +34,19 @@ class UserVoiceManager:
 
     # ── Add / update ──────────────────────────────────────────────────────────
 
-    def add_design_voice(self, name: str, desc: str, instruct: str) -> str:
+    def add_design_voice(self, name: str, desc: str, instruct: str,
+                         speed: float = 1.0) -> str:
         name = name.strip()
         if not name:
             return "✗ Voice name is required"
         voices = self.load()
-        entry = {"name": name, "desc": desc.strip(), "model": "design", "instruct": instruct.strip()}
+        entry = {
+            "name":    name,
+            "desc":    desc.strip(),
+            "model":   "design",
+            "instruct": instruct.strip(),
+            "speed":   round(float(speed), 3),
+        }
         for i, v in enumerate(voices):
             if v.get("name") == name:
                 voices[i] = entry
@@ -50,7 +57,8 @@ class UserVoiceManager:
         return f"✓ Saved '{name}'"
 
     def add_clone_voice(self, name: str, desc: str,
-                        ref_audio_src: str, ref_text: str) -> str:
+                        ref_audio_src: str, ref_text: str,
+                        speed: float = 1.0) -> str:
         name = name.strip()
         if not name:
             return "✗ Voice name is required"
@@ -74,6 +82,7 @@ class UserVoiceManager:
             "model":     "clone",
             "ref_audio": str(dest),
             "ref_text":  ref_text.strip(),
+            "speed":     round(float(speed), 3),
         }
         for i, v in enumerate(voices):
             if v.get("name") == name:

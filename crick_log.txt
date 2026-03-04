@@ -1,0 +1,4 @@
+start
+array: (2646000,)
+signal ok, peak=0.650
+wav written
